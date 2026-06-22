@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>许白集团 · 在职证明填写工具</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/index.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  :root{
+    --ink:#1c2b33; --paper:#f3efe7; --panel:#fbf9f4; --line:#ddd5c6;
+    --brand:#1f5f8b; --brand-soft:#e9f1f7; --muted:#7a7363; --seal:#b23a2e;
+    --field:#fffdf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,"Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    background:var(--panel); border-bottom:1px solid var(--line);
+    padding:14px 22px; display:flex; align-items:center; gap:14px;
+    position:sticky; top:0; z-index:10;
+  }
+  .topbar .logo{
+    font-weight:700; letter-spacing:.02em; color:var(--brand);
+    display:flex; align-items:baseline; gap:8px;
+  }
+  .topbar .logo small{ color:var(--muted); font-weight:500; font-size:.72rem; letter-spacing:.06em; }
+  .topbar .spacer{ flex:1; }
+  .btn{
+    border:none; border-radius:7px; padding:10px 18px; font-size:.9rem;
+    font-weight:600; cursor:pointer; font-family:inherit; transition:filter .12s;
+  }
+  .btn:hover{ filter:brightness(.94); }
+  .btn-primary{ background:var(--brand); color:#fff; }
+  .btn-ghost{ background:transparent; border:1px solid var(--line); color:var(--ink); }
+
+  .layout{ display:flex; gap:0; align-items:flex-start; }
+  .form{
+    width:380px; flex-shrink:0; padding:22px;
+    border-right:1px solid var(--line); background:var(--panel);
+    height:calc(100vh - 57px); overflow-y:auto; position:sticky; top:57px;
+  }
+  .form h2{ font-size:.78rem; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); margin:20px 0 10px; font-weight:600; }
+  .form h2:first-child{ margin-top:0; }
+  .field{ margin-bottom:13px; }
+  .field label{ display:block; font-size:.82rem; color:var(--muted); margin-bottom:4px; }
+  .field input, .field textarea{
+    width:100%; border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; font-size:.9rem; font-family:inherit;
+    background:var(--field); color:var(--ink); resize:vertical;
+  }
+  .field input:focus, .field textarea:focus{
+    outline:2px solid var(--brand); border-color:transparent;
+  }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .preview-wrap{ flex:1; padding:30px; overflow-x:auto; }
+  .page{
+    background:#fff; width:794px; min-height:1123px; margin:0 auto;
+    padding:64px 72px; box-shadow:0 2px 18px rgba(40,30,10,.12);
+    font-size:14.5px; color:#1a1a1a; line-height:1.85;
+  }
+  .doc-brand{ display:flex; align-items:baseline; gap:10px; color:var(--brand);
+    font-weight:700; font-size:17px; border-bottom:2px solid var(--brand); padding-bottom:6px; }
+  .doc-brand small{ color:#888; font-weight:500; font-size:11px; letter-spacing:.04em; }
+  .doc-slogan{ text-align:center; color:#666; font-size:12.5px; margin:8px 0 26px; letter-spacing:.02em; }
+  .doc-title1{ text-align:center; font-weight:700; font-size:15px; margin-top:18px; }
+  .doc-title2{ text-align:center; font-weight:700; font-size:19px; margin:4px 0 26px; }
+  .doc-p{ margin:14px 0; text-align:justify; }
+  .doc-p .em{ font-weight:600; }
+  .v{ font-weight:600; color:#0b3a5c; }
+  .blank{ display:inline-block; min-width:90px; border-bottom:1px solid #444;
+    text-align:center; font-weight:600; padding:0 6px; }
+  table.cert{ width:100%; border-collapse:collapse; margin:20px 0; }
+  table.cert td{ border:1px solid #555; padding:7px 9px; font-size:13.5px; vertical-align:top; }
+  table.cert td.k{ background:#f0f0f0; font-weight:600; width:18%; white-space:nowrap; }
+  table.cert td.val{ width:32%; }
+  .seal{ text-align:right; margin-top:46px; color:var(--seal);
+    font-weight:600; letter-spacing:.04em; }
+  .pageno{ text-align:center; color:#aaa; margin-top:30px; font-size:12px; }
+
+  .note{ font-size:.78rem; color:var(--muted); margin-top:18px; line-height:1.6; }
+
+  @media (max-width:900px){
+    .layout{ flex-direction:column; }
+    .form{ width:100%; height:auto; position:static; border-right:none;
+      border-bottom:1px solid var(--line); }
+    .preview-wrap{ width:100%; padding:16px; }
+    .page{ width:100%; min-height:auto; padding:32px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">许白集团 <small>XUBAI GROUP · 在职证明</small></div>
+  <div class="spacer"></div>
+  <span id="whoami" style="color:var(--muted);font-size:.85rem;margin-right:6px;"></span>
+  <button class="btn btn-ghost" id="resetBtn">清空</button>
+  <button class="btn btn-ghost" id="logoutBtn">退出登录</button>
+  <button class="btn btn-primary" id="dlBtn">下载 Word 文档</button>
+</div>
+
+<div class="layout">
+  <aside class="form" id="form">
+    <h2>员工信息</h2>
+    <div class="row2">
+      <div class="field"><label>姓名</label><input data-k="name" placeholder="张三"></div>
+      <div class="field"><label>身份证号码</label><input data-k="idno" placeholder="证件号"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>岗位类型</label><input data-k="postType" placeholder="如 全职"></div>
+      <div class="field"><label>岗位名称</label><input data-k="postName" placeholder="如 工程师"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>入职时间</label><input data-k="hireDate" placeholder="2023-01-01"></div>
+      <div class="field"><label>所属部门/公司</label><input data-k="dept" placeholder=""></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>离职时间</label><input data-k="leaveDate" placeholder="在职可留空"></div>
+      <div class="field"><label>通讯地址/电邮</label><input data-k="contact" placeholder=""></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>联系电话</label><input data-k="phone" placeholder=""></div>
+      <div class="field"><label>工资</label><input data-k="salary" placeholder=""></div>
+    </div>
+
+    <h2>负责人信息</h2>
+    <div class="row2">
+      <div class="field"><label>负责人传真/座机</label><input data-k="mFax" placeholder=""></div>
+      <div class="field"><label>负责人电邮</label><input data-k="mEmail" placeholder=""></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>负责人或上级</label><input data-k="mName" placeholder=""></div>
+      <div class="field"><label>负责人电话</label><input data-k="mPhone" placeholder=""></div>
+    </div>
+
+    <h2>证明结尾</h2>
+    <div class="field"><label>证明对象(员工)</label><input data-k="certName" placeholder="与上方姓名一致"></div>
+    <div class="field"><label>有效期至</label><input data-k="validUntil" placeholder="2026-12-31"></div>
+
+    <p class="note">所有内容仅在本机浏览器内处理,不会上传。右侧为实时预览,点击右上角即可导出 Word 文档。</p>
+  </aside>
+
+  <main class="preview-wrap">
+    <div class="page" id="page">
+      <div class="doc-brand">许白集团 <small>Xubai Group</small></div>
+      <div class="doc-slogan">用有温度的服务为客户提供更安全、更稳定、更好用的产品</div>
+
+      <div class="doc-title1">许白集团成员企业</div>
+      <div class="doc-title2">员工履历（在职）证明</div>
+
+      <div class="doc-p">致 申请人：</div>
+      <div class="doc-p">您好！您在<span class="em">许白集团员工人事系统（people.xubainet.cn）</span>申请了关于您本人在我司的履历（在职）档案调档查询，现通过个人（工作邮箱）邮箱/即时通讯工具（如微信/QQ/企业微信/飞书）对你申请作出答复。</div>
+
+      <table class="cert">
+        <tr><td class="k">姓名</td><td class="val v" id="p_name"></td><td class="k">身份证号码</td><td class="val v" id="p_idno"></td></tr>
+        <tr><td class="k">岗位类型</td><td class="val v" id="p_postType"></td><td class="k">岗位名称</td><td class="val v" id="p_postName"></td></tr>
+        <tr><td class="k">入职时间</td><td class="val v" id="p_hireDate"></td><td class="k">所属部门/公司</td><td class="val v" id="p_dept"></td></tr>
+        <tr><td class="k">离职时间</td><td class="val v" id="p_leaveDate"></td><td class="k">通讯地址/电邮</td><td class="val v" id="p_contact"></td></tr>
+        <tr><td class="k">联系电话</td><td class="val v" id="p_phone"></td><td class="k">工资</td><td class="val v" id="p_salary"></td></tr>
+        <tr><td class="k">负责人传真/座机</td><td class="val v" id="p_mFax"></td><td class="k">负责人电邮</td><td class="val v" id="p_mEmail"></td></tr>
+        <tr><td class="k">负责人或上级</td><td class="val v" id="p_mName"></td><td class="k">负责人电话</td><td class="val v" id="p_mPhone"></td></tr>
+      </table>
+
+      <div class="doc-p"><span class="em">据以上履历数据与其上级判断，特此证明</span>：员工 <span class="blank" id="p_certName"></span> ，工作表现良好，认真负责。该文件以加盖公司公章后为生效依据。复印后应加签员工个人签名后有效。</div>
+
+      <div class="doc-p"><span class="em">该文件有效期至</span> <span class="blank" id="p_validUntil"></span> <span class="em">（或其实际离职日期）</span>，续期（换开证明）需重新登录"许白集团员工人事系统"申请。</div>
+
+      <div class="seal">（出具证明单位盖章）</div>
+      <div class="pageno">1</div>
+    </div>
+  </main>
+</div>
+
+<script>
+const data = {};
+const inputs = document.querySelectorAll('#form input');
+
+function sync(){
+  inputs.forEach(inp=>{
+    const k = inp.dataset.k;
+    data[k] = inp.value.trim();
+    const cell = document.getElementById('p_'+k);
+    if(cell){
+      if(cell.classList.contains('blank')){
+        cell.textContent = data[k] || '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';
+      } else {
+        cell.textContent = data[k] || '';
+      }
+    }
+  });
+}
+inputs.forEach(inp=>inp.addEventListener('input', sync));
+
+document.getElementById('resetBtn').onclick = ()=>{
+  inputs.forEach(i=>i.value=''); sync();
+};
+
+// 显示当前用户;若未登录(token 失效)则跳回登录页
+fetch('/api/me').then(r=>{
+  if(!r.ok){ window.location.href='/login'; return null; }
+  return r.json();
+}).then(d=>{ if(d) document.getElementById('whoami').textContent = '已登录:'+d.username; });
+
+document.getElementById('logoutBtn').onclick = async ()=>{
+  await fetch('/api/logout',{method:'POST'});
+  window.location.href='/login';
+};
+
+// ---------- Word 导出 ----------
+const D = docx;
+function cellK(text){
+  return new D.TableCell({
+    width:{size:1650,type:D.WidthType.DXA},
+    shading:{fill:"F0F0F0",type:D.ShadingType.CLEAR},
+    margins:{top:60,bottom:60,left:100,right:100},
+    children:[new D.Paragraph({children:[new D.TextRun({text,bold:true,font:"\u5b8b\u4f53",size:21})]})]
+  });
+}
+function cellV(text){
+  return new D.TableCell({
+    width:{size:3030,type:D.WidthType.DXA},
+    margins:{top:60,bottom:60,left:100,right:100},
+    children:[new D.Paragraph({children:[new D.TextRun({text:text||"",font:"\u5b8b\u4f53",size:21,bold:true,color:"0B3A5C"})]})]
+  });
+}
+function row(k1,v1,k2,v2){
+  return new D.TableRow({children:[cellK(k1),cellV(v1),cellK(k2),cellV(v2)]});
+}
+function p(children,opts={}){
+  return new D.Paragraph(Object.assign({spacing:{after:140,line:300}},opts,{children}));
+}
+function run(text,o={}){ return new D.TextRun(Object.assign({text,font:"\u5b8b\u4f53",size:22},o)); }
+
+function buildDoc(){
+  const d=data;
+  const border={style:D.BorderStyle.SINGLE,size:4,color:"555555"};
+  const borders={top:border,bottom:border,left:border,right:border,
+    insideHorizontal:border,insideVertical:border};
+
+  const table=new D.Table({
+    width:{size:9360,type:D.WidthType.DXA},
+    columnWidths:[1650,3030,1650,3030],
+    borders,
+    rows:[
+      row("\u59d3\u540d",d.name,"\u8eab\u4efd\u8bc1\u53f7\u7801",d.idno),
+      row("\u5c97\u4f4d\u7c7b\u578b",d.postType,"\u5c97\u4f4d\u540d\u79f0",d.postName),
+      row("\u5165\u804c\u65f6\u95f4",d.hireDate,"\u6240\u5c5e\u90e8\u95e8/\u516c\u53f8",d.dept),
+      row("\u79bb\u804c\u65f6\u95f4",d.leaveDate,"\u901a\u8baf\u5730\u5740/\u7535\u90ae",d.contact),
+      row("\u8054\u7cfb\u7535\u8bdd",d.phone,"\u5de5\u8d44",d.salary),
+      row("\u8d1f\u8d23\u4eba\u4f20\u771f/\u5ea7\u673a",d.mFax,"\u8d1f\u8d23\u4eba\u7535\u90ae",d.mEmail),
+      row("\u8d1f\u8d23\u4eba\u6216\u4e0a\u7ea7",d.mName,"\u8d1f\u8d23\u4eba\u7535\u8bdd",d.mPhone),
+    ]
+  });
+
+  const blank = (t)=> t && t.length ? t : "\u3000\u3000\u3000\u3000\u3000\u3000";
+
+  const children=[
+    p([run("\u8bb8\u767d\u96c6\u56e2  Xubai Group",{bold:true,size:26,color:"1F5F8B"})],
+      {border:{bottom:{style:D.BorderStyle.SINGLE,size:12,color:"1F5F8B",space:4}}}),
+    p([run("\u7528\u6709\u6e29\u5ea6\u7684\u670d\u52a1\u4e3a\u5ba2\u6237\u63d0\u4f9b\u66f4\u5b89\u5168\u3001\u66f4\u7a33\u5b9a\u3001\u66f4\u597d\u7528\u7684\u4ea7\u54c1",{size:18,color:"666666"})],
+      {alignment:D.AlignmentType.CENTER,spacing:{after:280}}),
+    p([run("\u8bb8\u767d\u96c6\u56e2\u6210\u5458\u4f01\u4e1a",{bold:true,size:24})],{alignment:D.AlignmentType.CENTER,spacing:{after:60}}),
+    p([run("\u5458\u5de5\u5c65\u5386\uff08\u5728\u804c\uff09\u8bc1\u660e",{bold:true,size:30})],{alignment:D.AlignmentType.CENTER,spacing:{after:320}}),
+    p([run("\u81f4 \u7533\u8bf7\u4eba\uff1a")]),
+    p([
+      run("\u60a8\u597d\uff01\u60a8\u5728"),
+      run("\u8bb8\u767d\u96c6\u56e2\u5458\u5de5\u4eba\u4e8b\u7cfb\u7edf\uff08people.xubainet.cn\uff09",{bold:true}),
+      run("\u7533\u8bf7\u4e86\u5173\u4e8e\u60a8\u672c\u4eba\u5728\u6211\u53f8\u7684\u5c65\u5386\uff08\u5728\u804c\uff09\u6863\u6848\u8c03\u6863\u67e5\u8be2\uff0c\u73b0\u901a\u8fc7\u4e2a\u4eba\uff08\u5de5\u4f5c\u90ae\u7bb1\uff09\u90ae\u7bb1/\u5373\u65f6\u901a\u8baf\u5de5\u5177\uff08\u5982\u5fae\u4fe1/QQ/\u4f01\u4e1a\u5fae\u4fe1/\u98de\u4e66\uff09\u5bf9\u4f60\u7533\u8bf7\u4f5c\u51fa\u7b54\u590d\u3002")
+    ]),
+  ];
+
+  const tableSpacer=new D.Paragraph({spacing:{after:120},children:[]});
+
+  const tail=[
+    new D.Paragraph({spacing:{before:200,after:140,line:300},children:[
+      run("\u636e\u4ee5\u4e0a\u5c65\u5386\u6570\u636e\u4e0e\u5176\u4e0a\u7ea7\u5224\u65ad\uff0c\u7279\u6b64\u8bc1\u660e",{bold:true}),
+      run("\uff1a\u5458\u5de5 "),
+      run(blank(d.certName),{bold:true,underline:{}}),
+      run(" \uff0c\u5de5\u4f5c\u8868\u73b0\u826f\u597d\uff0c\u8ba4\u771f\u8d1f\u8d23\u3002\u8be5\u6587\u4ef6\u4ee5\u52a0\u76d6\u516c\u53f8\u516c\u7ae0\u540e\u4e3a\u751f\u6548\u4f9d\u636e\u3002\u590d\u5370\u540e\u5e94\u52a0\u7b7e\u5458\u5de5\u4e2a\u4eba\u7b7e\u540d\u540e\u6709\u6548\u3002")
+    ]}),
+    new D.Paragraph({spacing:{after:140,line:300},children:[
+      run("\u8be5\u6587\u4ef6\u6709\u6548\u671f\u81f3",{bold:true}),
+      run(" "),
+      run(blank(d.validUntil),{bold:true,underline:{}}),
+      run(" "),
+      run("\uff08\u6216\u5176\u5b9e\u9645\u79bb\u804c\u65e5\u671f\uff09",{bold:true}),
+      run("\uff0c\u7eed\u671f\uff08\u6362\u5f00\u8bc1\u660e\uff09\u9700\u91cd\u65b0\u767b\u5f55\u201c\u8bb8\u767d\u96c6\u56e2\u5458\u5de5\u4eba\u4e8b\u7cfb\u7edf\u201d\u7533\u8bf7\u3002")
+    ]}),
+    new D.Paragraph({alignment:D.AlignmentType.RIGHT,spacing:{before:600},children:[
+      run("\uff08\u51fa\u5177\u8bc1\u660e\u5355\u4f4d\u76d6\u7ae0\uff09",{color:"B23A2E",bold:true})
+    ]}),
+  ];
+
+  return new D.Document({
+    styles:{default:{document:{run:{font:"\u5b8b\u4f53",size:22}}}},
+    sections:[{
+      properties:{page:{size:{width:11906,height:16838},
+        margin:{top:1440,right:1280,bottom:1440,left:1280}}},
+      children:[...children,tableSpacer,table,...tail]
+    }]
+  });
+}
+
+document.getElementById('dlBtn').onclick = async ()=>{
+  try{
+    const doc=buildDoc();
+    const blob=await D.Packer.toBlob(doc);
+    const fname = (data.name? data.name+'-' : '')+'\u5728\u804c\u8bc1\u660e.docx';
+    saveAs(blob,fname);
+  }catch(e){
+    alert('\u751f\u6210\u5931\u8d25\uff1a'+e.message);
+  }
+};
+
+sync();
+</script>
+</body>
+</html>

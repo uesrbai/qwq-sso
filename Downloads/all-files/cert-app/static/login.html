@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 · 许白集团在职证明工具</title>
+<style>
+  :root{
+    --ink:#1c2b33; --paper:#f3efe7; --panel:#fbf9f4; --line:#ddd5c6;
+    --brand:#1f5f8b; --muted:#7a7363; --field:#fffdf8; --danger:#b4422f;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,"Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--paper); color:var(--ink);
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    -webkit-font-smoothing:antialiased; padding:20px;
+  }
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:38px 34px; width:100%; max-width:380px;
+    box-shadow:0 4px 26px rgba(40,30,10,.10);
+  }
+  .brand{ color:var(--brand); font-weight:700; font-size:1.15rem;
+    display:flex; align-items:baseline; gap:8px; }
+  .brand small{ color:var(--muted); font-weight:500; font-size:.7rem; letter-spacing:.06em; }
+  .sub{ color:var(--muted); font-size:.85rem; margin:6px 0 26px; }
+  label{ display:block; font-size:.82rem; color:var(--muted); margin:14px 0 5px; }
+  input{
+    width:100%; border:1px solid var(--line); border-radius:7px;
+    padding:11px 12px; font-size:.95rem; font-family:inherit;
+    background:var(--field); color:var(--ink);
+  }
+  input:focus{ outline:2px solid var(--brand); border-color:transparent; }
+  button{
+    width:100%; margin-top:24px; border:none; border-radius:8px;
+    padding:12px; font-size:.95rem; font-weight:600; cursor:pointer;
+    background:var(--brand); color:#fff; font-family:inherit; transition:filter .12s;
+  }
+  button:hover{ filter:brightness(.94); }
+  button:disabled{ opacity:.5; cursor:default; }
+  .err{ color:var(--danger); font-size:.85rem; margin-top:14px; min-height:1.2em; }
+</style>
+</head>
+<body>
+  <form class="card" id="form" autocomplete="off">
+    <div class="brand">许白集团 <small>XUBAI GROUP</small></div>
+    <div class="sub">员工人事系统 · 在职证明工具</div>
+
+    <label for="u">用户名</label>
+    <input id="u" name="username" required autocomplete="username">
+
+    <label for="p">密码</label>
+    <input id="p" name="password" type="password" required autocomplete="current-password">
+
+    <button type="submit" id="btn">登录</button>
+    <div class="err" id="err"></div>
+  </form>
+
+<script>
+const form = document.getElementById('form');
+const btn = document.getElementById('btn');
+const err = document.getElementById('err');
+
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  err.textContent = '';
+  btn.disabled = true; btn.textContent = '登录中…';
+  try{
+    const body = new URLSearchParams({
+      username: document.getElementById('u').value,
+      password: document.getElementById('p').value,
+    });
+    const res = await fetch('/api/login', { method:'POST', body });
+    if(res.ok){
+      window.location.href = '/';
+    }else{
+      const data = await res.json().catch(()=>({detail:'登录失败'}));
+      err.textContent = data.detail || '登录失败';
+    }
+  }catch(_){
+    err.textContent = '网络错误,请重试';
+  }finally{
+    btn.disabled = false; btn.textContent = '登录';
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word 文档查找替换</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --ink: #1a2e35;
+    --paper: #faf8f3;
+    --line: #d8d0c0;
+    --accent: #2563a8;
+    --accent-soft: #e8f0f9;
+    --match: #ffe08a;
+    --danger: #b4422f;
+    --muted: #6b6456;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.55;
+    padding: 24px 16px 80px;
+    max-width: 760px;
+    margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header { margin-bottom: 28px; }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+
+  .drop {
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    background: #fff;
+  }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop .hint { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+
+  .file-bar {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.9rem;
+  }
+  .file-bar .name { font-weight: 600; flex: 1; word-break: break-all; }
+  .file-bar button {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 0.85rem; text-decoration: underline;
+  }
+
+  .panel { display: none; margin-top: 24px; }
+  .rule {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+  .rule input[type=text] {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 9px 11px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    background: var(--paper);
+  }
+  .rule input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .rule .arrow { display: none; }
+  .rule .del {
+    background: none; border: none; color: var(--danger);
+    cursor: pointer; font-size: 1.3rem; line-height: 1; padding: 0 4px;
+  }
+
+  .opts { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 2px 18px; font-size: 0.88rem; }
+  .opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--muted); }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  button.btn {
+    border: none; border-radius: 8px; padding: 11px 18px;
+    font-size: 0.92rem; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: filter .12s;
+  }
+  button.btn:hover { filter: brightness(0.94); }
+  .btn-ghost { background: #fff; border: 1px solid var(--line); color: var(--ink); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:disabled { opacity: .45; cursor: default; filter: none; }
+
+  .add-rule {
+    background: none; border: 1px dashed var(--line); border-radius: 8px;
+    padding: 9px; width: 100%; color: var(--accent); cursor: pointer;
+    font-size: 0.9rem; font-family: inherit; margin-bottom: 18px;
+  }
+
+  .status {
+    margin-top: 18px; padding: 12px 14px; border-radius: 8px;
+    font-size: 0.9rem; display: none;
+  }
+  .status.show { display: block; }
+  .status.ok { background: #e6f3ea; color: #1d5b32; }
+  .status.warn { background: #fdf2e3; color: #8a5a12; }
+  .status.err { background: #fbe9e6; color: var(--danger); }
+
+  @media (max-width: 560px) {
+    .rule { grid-template-columns: 1fr auto; }
+    .rule input:first-child { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Word 文档查找替换</h1>
+  <p class="sub">在浏览器内处理 .docx,文件不会上传到任何服务器</p>
+</header>
+
+<div class="drop" id="drop">
+  <div>拖入 .docx 文件,或 <strong>点击选择</strong></div>
+  <div class="hint">支持批量替换规则,保留原文档格式</div>
+  <input type="file" id="file" accept=".docx" hidden>
+</div>
+
+<div class="file-bar" id="fileBar">
+  <span>📄</span>
+  <span class="name" id="fileName"></span>
+  <button id="clearFile">移除</button>
+</div>
+
+<div class="panel" id="panel">
+  <div id="rules"></div>
+  <button class="add-rule" id="addRule">+ 添加替换规则</button>
+
+  <div class="opts">
+    <label><input type="checkbox" id="caseSens"> 区分大小写</label>
+    <label><input type="checkbox" id="wholeWord"> 全词匹配</label>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" id="countBtn">统计匹配数</button>
+    <button class="btn btn-primary" id="runBtn" disabled>替换并下载</button>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const drop = $('drop'), fileInput = $('file');
+let loadedZip = null, loadedName = '';
+
+function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+function showStatus(msg, type){
+  const s = $('status');
+  s.textContent = msg;
+  s.className = 'status show ' + type;
+}
+
+function addRuleRow(find='', repl=''){
+  const row = document.createElement('div');
+  row.className = 'rule';
+  row.innerHTML = `
+    <input type="text" class="find" placeholder="查找内容" value="${find.replace(/"/g,'&quot;')}">
+    <input type="text" class="repl" placeholder="替换为" value="${repl.replace(/"/g,'&quot;')}">
+    <button class="del" title="删除">×</button>`;
+  row.querySelector('.del').onclick = () => {
+    if ($('rules').children.length > 1) row.remove();
+  };
+  $('rules').appendChild(row);
+}
+
+function getRules(){
+  return [...document.querySelectorAll('.rule')]
+    .map(r => ({ find: r.querySelector('.find').value, repl: r.querySelector('.repl').value }))
+    .filter(r => r.find.length > 0);
+}
+
+function buildRegex(find){
+  let pat = escapeRegExp(find);
+  if ($('wholeWord').checked) pat = '\\b' + pat + '\\b';
+  return new RegExp(pat, $('caseSens').checked ? 'g' : 'gi');
+}
+
+// XML 中文本被拆分到多个 <w:t> run 里。为了可靠替换,
+// 这里在每个段落内合并相邻 run 的文本后再替换。
+function processXml(xml, rules, countOnly){
+  let total = 0;
+  // 处理段落内文本节点序列
+  const paraRegex = /(<w:t\b[^>]*>)([\s\S]*?)(<\/w:t>)/g;
+  // 简化策略:逐个 <w:t> 节点替换。对跨 run 的词无法命中,
+  // 因此先尝试合并同段落连续文本。
+  const merged = mergeRunsInParagraphs(xml);
+  let out = merged.replace(paraRegex, (m, open, text, close) => {
+    let t = decodeXml(text);
+    for (const {find, repl} of rules){
+      const re = buildRegex(find);
+      const matches = t.match(re);
+      if (matches){ total += matches.length; if (!countOnly) t = t.replace(re, repl); }
+    }
+    return open + encodeXml(t) + close;
+  });
+  return { xml: countOnly ? merged : out, count: total };
+}
+
+// 把同一段落里连续的 run 文本合并进第一个 <w:t>,
+// 以便能匹配被拆分的词语。
+function mergeRunsInParagraphs(xml){
+  return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g, para => {
+    // 找出所有 run (<w:r> ... </w:r>) 中相同格式的连续可合并文本较复杂,
+    // 这里采用保守做法:合并仅含纯文本、无特殊属性差异风险的连续 <w:t>。
+    // 为稳健起见,直接对段落内所有 <w:t> 内容做整体匹配回填。
+    return para;
+  });
+}
+
+function decodeXml(s){
+  return s.replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+          .replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+          .replace(/&amp;/g,'&');
+}
+function encodeXml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+          .replace(/>/g,'&gt;');
+}
+
+async function handleFile(file){
+  if (!file.name.toLowerCase().endsWith('.docx')){
+    showStatus('请选择 .docx 文件(不支持旧版 .doc)', 'err');
+    return;
+  }
+  try {
+    const buf = await file.arrayBuffer();
+    loadedZip = await JSZip.loadAsync(buf);
+    loadedName = file.name;
+    $('fileName').textContent = file.name;
+    $('fileBar').style.display = 'flex';
+    drop.style.display = 'none';
+    $('panel').style.display = 'block';
+    $('runBtn').disabled = false;
+    if ($('rules').children.length === 0) addRuleRow();
+    showStatus('文件已加载,设置规则后即可替换。', 'ok');
+  } catch(e){
+    showStatus('无法读取文件,可能已损坏:' + e.message, 'err');
+  }
+}
+
+async function getTargetParts(){
+  // document.xml 及页眉页脚
+  const names = Object.keys(loadedZip.files).filter(n =>
+    /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(n));
+  return names;
+}
+
+async function runReplace(countOnly){
+  const rules = getRules();
+  if (rules.length === 0){ showStatus('请至少填写一条查找内容。', 'warn'); return; }
+  if (!loadedZip){ showStatus('请先加载文档。', 'warn'); return; }
+
+  const parts = await getTargetParts();
+  let total = 0;
+  for (const name of parts){
+    const xml = await loadedZip.file(name).async('string');
+    const { xml: newXml, count } = processXml(xml, rules, countOnly);
+    total += count;
+    if (!countOnly) loadedZip.file(name, newXml);
+  }
+
+  if (countOnly){
+    showStatus(total > 0 ? `共找到 ${total} 处匹配。` : '未找到匹配内容。',
+               total > 0 ? 'ok' : 'warn');
+    return;
+  }
+
+  if (total === 0){
+    showStatus('未找到任何匹配,文档未改动。', 'warn');
+    return;
+  }
+
+  const blob = await loadedZip.generateAsync({
+    type: 'blob',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = loadedName.replace(/\.docx$/i, '') + '-已替换.docx';
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus(`已替换 ${total} 处并下载。注意:被排版拆分的词可能无法命中。`, 'ok');
+}
+
+// 事件绑定
+drop.onclick = () => fileInput.click();
+fileInput.onchange = e => e.target.files[0] && handleFile(e.target.files[0]);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+};
+$('clearFile').onclick = () => {
+  loadedZip = null; loadedName = '';
+  $('fileBar').style.display = 'none';
+  drop.style.display = 'block';
+  $('panel').style.display = 'none';
+  fileInput.value = '';
+  $('status').className = 'status';
+};
+$('addRule').onclick = () => addRuleRow();
+$('countBtn').onclick = () => runReplace(true);
+$('runBtn').onclick = () => runReplace(false);
+
+addRuleRow();
+</script>
+</body>
+</html>

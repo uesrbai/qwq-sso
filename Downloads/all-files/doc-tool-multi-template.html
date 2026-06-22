@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文档工具 · 多模板(离线版)</title>
+<style>
+  :root{
+    --ink:#1c2b33; --paper:#f3efe7; --panel:#fbf9f4; --line:#ddd5c6;
+    --brand:#1f5f8b; --brand-soft:#e9f1f7; --muted:#7a7363; --seal:#b23a2e;
+    --field:#fffdf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,"Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    background:var(--panel); border-bottom:1px solid var(--line);
+    padding:14px 22px; display:flex; align-items:center; gap:14px;
+    position:sticky; top:0; z-index:10;
+  }
+  .topbar .logo{ font-weight:700; letter-spacing:.02em; color:var(--brand);
+    display:flex; align-items:baseline; gap:8px; }
+  .topbar .logo small{ color:var(--muted); font-weight:500; font-size:.72rem; letter-spacing:.06em; }
+  .topbar .spacer{ flex:1; }
+  .btn{ border:none; border-radius:7px; padding:10px 18px; font-size:.9rem;
+    font-weight:600; cursor:pointer; font-family:inherit; transition:filter .12s; }
+  .btn:hover{ filter:brightness(.94); }
+  .btn-primary{ background:var(--brand); color:#fff; }
+  .btn-ghost{ background:transparent; border:1px solid var(--line); color:var(--ink); }
+
+  .layout{ display:flex; align-items:flex-start; }
+  .form{ width:380px; flex-shrink:0; padding:22px;
+    border-right:1px solid var(--line); background:var(--panel);
+    height:calc(100vh - 57px); overflow-y:auto; position:sticky; top:57px; }
+  .form h2{ font-size:.78rem; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--muted); margin:20px 0 10px; font-weight:600; }
+  .form h2:first-child{ margin-top:0; }
+  .field{ margin-bottom:13px; }
+  .field label{ display:block; font-size:.82rem; color:var(--muted); margin-bottom:4px; }
+  .field input{ width:100%; border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; font-size:.9rem; font-family:inherit;
+    background:var(--field); color:var(--ink); }
+  .field input:focus{ outline:2px solid var(--brand); border-color:transparent; }
+  .field select{ width:100%; border:1px solid var(--line); border-radius:6px;
+    padding:8px 10px; font-size:.9rem; font-family:inherit;
+    background:var(--field); color:var(--ink); }
+  .field select:focus{ outline:2px solid var(--brand); border-color:transparent; }
+  .vmsg{ font-size:.78rem; margin-top:5px; min-height:1.1em; line-height:1.4; }
+  .vmsg.bad{ color:var(--seal); }
+  .vmsg.good{ color:#1d7a3d; }
+  input.invalid{ border-color:var(--seal) !important; }
+  .btn-primary:disabled{ opacity:.45; cursor:not-allowed; filter:none; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .preview-wrap{ flex:1; padding:30px; overflow-x:auto; }
+  .page{ background:#fff; width:794px; min-height:1123px; margin:0 auto;
+    padding:64px 72px; box-shadow:0 2px 18px rgba(40,30,10,.12);
+    font-size:14.5px; color:#1a1a1a; line-height:1.85; }
+  .doc-brand{ display:flex; align-items:baseline; gap:10px; color:var(--brand);
+    font-weight:700; font-size:17px; border-bottom:2px solid var(--brand); padding-bottom:6px; }
+  .doc-brand small{ color:#888; font-weight:500; font-size:11px; letter-spacing:.04em; }
+  .doc-slogan{ text-align:center; color:#666; font-size:12.5px; margin:8px 0 26px; letter-spacing:.02em; }
+  .doc-title1{ text-align:center; font-weight:700; font-size:15px; margin-top:18px; }
+  .doc-title2{ text-align:center; font-weight:700; font-size:19px; margin:4px 0 26px; }
+  .doc-p{ margin:14px 0; text-align:justify; }
+  .doc-p .em{ font-weight:600; }
+  .v{ font-weight:600; color:#0b3a5c; }
+  .blank{ display:inline-block; min-width:90px; border-bottom:1px solid #444;
+    text-align:center; font-weight:600; padding:0 6px; }
+  table.cert{ width:100%; border-collapse:collapse; margin:20px 0; }
+  table.cert td{ border:1px solid #555; padding:7px 9px; font-size:13.5px; vertical-align:top; }
+  table.cert td.k{ background:#f0f0f0; font-weight:600; width:18%; white-space:nowrap; }
+  table.cert td.val{ width:32%; }
+  .seal{ text-align:right; margin-top:46px; color:var(--seal); font-weight:600; letter-spacing:.04em; }
+  .pageno{ text-align:center; color:#aaa; margin-top:30px; font-size:12px; }
+  .note{ font-size:.78rem; color:var(--muted); margin-top:18px; line-height:1.6; }
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:#1c2b33; color:#fff; padding:11px 20px; border-radius:8px;
+    font-size:.88rem; opacity:0; pointer-events:none; transition:opacity .25s; z-index:50; }
+  .toast.show{ opacity:1; }
+
+  @media (max-width:900px){
+    .layout{ flex-direction:column; }
+    .form{ width:100%; height:auto; position:static; border-right:none;
+      border-bottom:1px solid var(--line); }
+    .preview-wrap{ width:100%; padding:16px; }
+    .page{ width:100%; min-height:auto; padding:32px 24px; }
+  }
+  /* ===== 自由编排(其他模板)样式 ===== */
+  .btn-sm{ padding:6px 10px; font-size:.82rem; }
+  #oPalette button{ background:#fff; border:1px solid var(--line); border-radius:16px;
+    padding:5px 11px; font-size:.8rem; cursor:pointer; font-family:inherit; color:var(--brand); }
+  #oPalette button:hover{ background:var(--brand-soft); }
+  .oblock{ background:#fff; border:1px solid var(--line); border-radius:10px; margin-bottom:10px; overflow:hidden; }
+  .oblock-head{ display:flex; align-items:center; gap:8px; padding:9px 12px; background:#f6f2ea; border-bottom:1px solid var(--line); }
+  .oblock-head .ttl{ font-weight:600; font-size:.85rem; flex:1; }
+  .oblock-head .tag{ font-size:.7rem; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:10px; padding:1px 7px; }
+  .oblock-head button{ background:none; border:none; cursor:pointer; color:var(--muted); font-size:.95rem; padding:2px 5px; border-radius:4px; }
+  .oblock-head button:hover{ background:#eee; color:var(--ink); }
+  .oblock-head button:disabled{ opacity:.25; cursor:default; }
+  .oblock-body{ padding:11px 12px; }
+  .oblock-body label.lab{ display:block; font-size:.78rem; color:var(--muted); margin:8px 0 4px; }
+  .oblock-body label.lab:first-child{ margin-top:0; }
+  .othree{ display:grid; grid-template-columns:1fr 1fr auto; gap:8px; align-items:center; }
+  .orow-del{ background:none;border:none;color:var(--seal);cursor:pointer;font-size:1.1rem; }
+  .oadd-row{ background:none;border:1px dashed var(--line);border-radius:6px; padding:6px;width:100%;color:var(--brand);cursor:pointer;font-size:.82rem;font-family:inherit;margin-top:6px; }
+  .oinline-opt{ display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--muted); margin-top:6px; }
+  .othumb{ position:relative; width:72px; height:72px; border:1px solid var(--line); border-radius:6px; overflow:hidden; background:#fff; display:inline-block; margin:6px 6px 0 0; }
+  .othumb img{ width:100%; height:100%; object-fit:cover; }
+  .othumb button{ position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(0,0,0,.6); color:#fff; cursor:pointer; line-height:1; font-size:12px; }
+  .empty-hint{ color:#bbb; font-style:italic; }
+  /* 自由编排预览块 */
+  #otherPage .pv-header{ display:flex; align-items:center; gap:14px; border-bottom:2px solid var(--brand); padding-bottom:8px; }
+  #otherPage .pv-header img{ max-height:46px; max-width:120px; object-fit:contain; }
+  #otherPage .pv-header .hname{ font-weight:700; font-size:17px; color:var(--brand); }
+  #otherPage .pv-header .hen{ color:#888; font-weight:500; font-size:11px; }
+  #otherPage .pv-slogan{ text-align:center; color:#666; font-size:12.5px; margin:8px 0 22px; }
+  #otherPage .pv-heading{ text-align:center; font-weight:700; margin:10px 0; }
+  #otherPage .pv-p{ margin:13px 0; text-align:justify; }
+  #otherPage .pv-table{ width:100%; border-collapse:collapse; margin:18px 0; }
+  #otherPage .pv-table td{ border:1px solid #555; padding:7px 9px; font-size:13.5px; vertical-align:middle; }
+  #otherPage .pv-table td.k{ background:#f0f0f0; font-weight:600; white-space:nowrap; width:18%; }
+  #otherPage .pv-table td.v{ font-weight:600; color:#0b3a5c; width:32%; }
+  #otherPage .pv-seal{ text-align:right; margin-top:40px; color:var(--seal); font-weight:600; }
+  #otherPage .pv-imgs .cap{ text-align:center; font-weight:700; margin-bottom:12px; }
+  #otherPage .pv-imgs img{ display:block; margin:0 auto 12px; max-width:100%; border:1px solid #ccc; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo" data-i18n="appTitle">文档工具 <small data-i18n="appSub">多模板</small></div>
+  <select id="langSel" style="border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:.88rem;font-family:inherit;background:var(--field);color:var(--ink);">
+    <option value="zh">简体中文</option>
+    <option value="zhTW">繁體中文</option>
+    <option value="en">English</option>
+  </select>
+  <select id="tplSel" style="border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:.88rem;font-family:inherit;background:var(--field);color:var(--ink);">
+    <option value="cert" data-i18n="tplCert">模板1 · 在职(履历)证明</option>
+    <option value="approval" data-i18n="tplApproval">模板2 · 审批单申请</option>
+    <option value="notice" data-i18n="tplNotice">模板3 · 公告</option>
+    <option value="other" data-i18n="tplOther">其他(自由编排 · 模块化编辑)</option>
+  </select>
+  <div class="spacer"></div>
+  <button class="btn btn-ghost" id="resetBtn" data-i18n="btnReset">清空</button>
+  <button class="btn btn-primary" id="dlBtn" data-i18n="btnExport">下载 Word 文档</button>
+</div>
+
+<div class="layout">
+  <aside class="form" id="form">
+    <div id="certForm">
+    <h2 data-i18n="员工信息">员工信息</h2>
+    <div class="row2">
+      <div class="field"><label data-i18n="姓名">姓名</label><input data-k="name" id="nameInput" placeholder="张三 或 John" data-i18n-ph="张三 或 John">
+        <div class="vmsg" id="nameMsg"></div>
+      </div>
+      <div class="field"><label data-i18n="证件类型">证件类型</label>
+        <select id="docType">
+          <option value="id" data-i18n="中华人民共和国居民身份证">中华人民共和国居民身份证</option>
+          <option value="hk_residence" data-i18n="中华人民共和国港澳居民居住证">中华人民共和国港澳居民居住证</option>
+          <option value="tw_residence" data-i18n="中华人民共和国台湾居民居住证">中华人民共和国台湾居民居住证</option>
+          <option value="foreign_pr" data-i18n="中华人民共和国外国人永久居留身份证">中华人民共和国外国人永久居留身份证</option>
+          <option value="passport" data-i18n="护照">护照</option>
+          <option value="hkmo" data-i18n="港澳居民来往内地通行证">港澳居民来往内地通行证</option>
+          <option value="taiwan" data-i18n="台湾居民来往大陆通行证">台湾居民来往大陆通行证</option>
+          <option value="other" data-i18n="其他证件">其他证件</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field" style="grid-column:1 / -1;">
+        <label data-i18n="身份证明文件号码">身份证明文件号码</label>
+        <input data-k="idno" id="idnoInput" placeholder="请输入证件号" data-i18n-ph="请输入证件号">
+        <div class="vmsg" id="idnoMsg"></div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label data-i18n="岗位类型">岗位类型</label>
+        <select id="postTypeSel">
+          <option value="全职" data-i18n="全职">全职</option>
+          <option value="实习" data-i18n="实习">实习</option>
+          <option value="兼职" data-i18n="兼职">兼职</option>
+          <option value="其他" data-i18n="其他">其他</option>
+        </select>
+        <div class="vmsg" id="ageRuleMsg" style="color:var(--muted);"></div>
+        <div class="vmsg" id="ageMsg"></div>
+      </div>
+      <div class="field"><label data-i18n="岗位名称">岗位名称</label><input data-k="postName" placeholder="如 工程师" data-i18n-ph="如 工程师"></div>
+    </div>
+    <div class="row2">
+      <div class="field" id="postTypeOtherField" style="display:none;grid-column:1 / -1;">
+        <label data-i18n="请填写具体岗位类型">请填写具体岗位类型</label>
+        <input id="postTypeOther" placeholder="请输入具体类型" data-i18n-ph="请输入具体类型">
+        <div class="vmsg" id="postTypeMsg"></div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label data-i18n="入职时间">入职时间</label><input type="date" id="hireDateInput" data-k="hireDate"></div>
+      <div class="field"><label data-i18n="所属部门/公司">所属部门/公司</label><input data-k="dept" placeholder=""></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label data-i18n="离职状态">离职状态</label>
+        <select id="leaveStatus">
+          <option value="active" data-i18n="在职(显示 N/A)">在职(显示 N/A)</option>
+          <option value="left" data-i18n="已离职(选择日期)">已离职(选择日期)</option>
+        </select>
+      </div>
+      <div class="field" id="leaveDateField" style="display:none;"><label data-i18n="离职时间">离职时间</label><input type="date" id="leaveDateInput">
+        <div class="vmsg" id="leaveMsg"></div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field" style="grid-column:1 / -1;"><label data-i18n="通讯地址/电邮">通讯地址/电邮</label><input data-k="contact" placeholder=""></div>
+    </div>
+    <div class="row2">
+      <div class="field" style="grid-column:1 / -1;"><label data-i18n="联系电话">联系电话</label><input data-k="phone" placeholder=""></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label data-i18n="工资货币">工资货币</label>
+        <select id="salaryCur">
+          <option value="CNY" data-i18n="CN￥ 人民币">CN￥ 人民币</option>
+          <option value="HKD" data-i18n="HK$ 港元">HK$ 港元</option>
+          <option value="USD" data-i18n="US$ 美元">US$ 美元</option>
+        </select>
+      </div>
+      <div class="field"><label data-i18n="工资数额(留空则 N/A)">工资数额(留空则 N/A)</label><input id="salaryAmt" inputmode="decimal" placeholder="如 15000" data-i18n-ph="如 15000">
+        <div class="vmsg" id="salaryMsg"></div>
+      </div>
+    </div>
+
+    <h2 data-i18n="负责人信息">负责人信息</h2>
+    <div class="row2">
+      <div class="field"><label data-i18n="负责人传真/座机">负责人传真/座机</label><input data-k="mFax" placeholder="留空显示 N/A" data-i18n-ph="留空显示 N/A"></div>
+      <div class="field"><label data-i18n="负责人电邮">负责人电邮</label><input data-k="mEmail" placeholder="留空显示 N/A" data-i18n-ph="留空显示 N/A"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label data-i18n="负责人或上级">负责人或上级</label><input data-k="mName" placeholder="留空显示 N/A" data-i18n-ph="留空显示 N/A"></div>
+      <div class="field"><label data-i18n="负责人电话">负责人电话</label><input data-k="mPhone" placeholder="留空显示 +86-400-991-5178" data-i18n-ph="留空显示 +86-400-991-5178"></div>
+    </div>
+
+    <h2 data-i18n="证明信息">证明信息</h2>
+    <div class="field">
+      <label data-i18n="申请时间(留空则用今天)">申请时间(留空则用今天)</label>
+      <input type="date" id="applyDateInput">
+      <div class="vmsg" id="applyMsg" style="color:var(--muted);"></div>
+    </div>
+
+    <h2 data-i18n="证明结尾">证明结尾</h2>
+    <div class="field"><label data-i18n="证明对象(员工)">证明对象(员工)</label><input data-k="certName" id="certNameInput" placeholder="自动与姓名一致" data-i18n-ph="自动与姓名一致" readonly style="background:#f0ece2;color:var(--muted);">
+      <div class="vmsg" style="color:var(--muted);">与"姓名"自动同步</div>
+    </div>
+    <div class="field">
+      <label data-i18n="有效期至(留空则为申请日期后6个月)">有效期至(留空则为申请日期后6个月)</label>
+      <input type="date" id="validUntilInput">
+      <div class="vmsg" id="validMsg" style="color:var(--muted);"></div>
+    </div>
+
+    <h2 data-i18n="证件影印件(可选,最多 4 张)">证件影印件(可选,最多 4 张)</h2>
+    <div class="field">
+      <label data-i18n="上传身份证明文件图片">上传身份证明文件图片</label>
+      <input type="file" id="imgInput" accept="image/png,image/jpeg" multiple>
+      <div class="vmsg" id="imgMsg"></div>
+      <div id="imgThumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
+    </div>
+
+    <p class="note">完全离线运行,不联网、不上传到服务器。证件图片仅在本机嵌入生成的文档。右侧实时预览,点右上角导出 Word 文档(.docx),用 Word/WPS 均可打开。</p>
+    </div><!-- /certForm -->
+
+    <div id="approvalForm" style="display:none;">
+      <h2 data-i18n="审批单信息">审批单信息</h2>
+      <div class="two">
+        <div class="field"><label data-i18n="申请人">申请人</label><input id="ap_name" placeholder="张三" data-i18n-ph="张三"></div>
+        <div class="field"><label data-i18n="所属部门">所属部门</label><input id="ap_dept" placeholder="如 技术部" data-i18n-ph="如 技术部"></div>
+      </div>
+      <div class="field"><label data-i18n="申请日期(留空用今天)">申请日期(留空用今天)</label><input type="date" id="ap_date"></div>
+      <div class="field"><label data-i18n="审批事项类型">审批事项类型</label>
+        <select id="ap_type">
+          <option value="请假" data-i18n="请假">请假</option>
+          <option value="报销" data-i18n="报销">报销</option>
+          <option value="采购" data-i18n="采购">采购</option>
+          <option value="用章" data-i18n="用章">用章</option>
+          <option value="其他" data-i18n="其他">其他</option>
+        </select>
+        <div class="vmsg" id="ap_typeMsg" style="display:none;"></div>
+      </div>
+      <div class="field" id="ap_typeOtherField" style="display:none;">
+        <label data-i18n="请填写具体事项">请填写具体事项</label><input id="ap_typeOther" placeholder="具体事项类型" data-i18n-ph="具体事项类型">
+      </div>
+      <div class="field"><label data-i18n="事由说明">事由说明</label><textarea id="ap_reason" rows="3" placeholder="简要说明申请事由" data-i18n-ph="简要说明申请事由"></textarea></div>
+      <div class="two">
+        <div class="field"><label data-i18n="金额(可选)">金额(可选)</label><input id="ap_amount" placeholder="如 1500" data-i18n-ph="如 1500"><div class="vmsg" id="ap_amtMsg"></div></div>
+        <div class="field"><label data-i18n="币种">币种</label>
+          <select id="ap_cur"><option value="CN￥">CN￥</option><option value="HK$">HK$</option><option value="US$">US$</option></select>
+        </div>
+      </div>
+      <div class="two">
+        <div class="field"><label data-i18n="起始日期(可选)">起始日期(可选)</label><input type="date" id="ap_start"></div>
+        <div class="field"><label data-i18n="结束日期(可选)">结束日期(可选)</label><input type="date" id="ap_end"><div class="vmsg" id="ap_dateMsg"></div></div>
+      </div>
+      <div class="field"><label data-i18n="审批人">审批人</label><input id="ap_approver" placeholder="审批人姓名" data-i18n-ph="审批人姓名"></div>
+      <div class="field"><label data-i18n="备注(可选)">备注(可选)</label><textarea id="ap_remark" rows="2" placeholder="备注" data-i18n-ph="备注"></textarea></div>
+
+      <h2 data-i18n="抬头设置">抬头设置</h2>
+      <div class="field"><label data-i18n="单位名称">单位名称</label><input id="ap_org" placeholder="公司/单位名称" data-i18n-ph="公司/单位名称"></div>
+
+      <p class="note">完全离线运行,不联网、不上传。右侧实时预览,点右上角导出 Word 文档。</p>
+    </div><!-- /approvalForm -->
+
+    <div id="noticeForm" style="display:none;">
+      <h2 data-i18n="公告信息">公告信息</h2>
+      <div class="field"><label data-i18n="发文单位(抬头)">发文单位(抬头)</label><input id="nt_org" placeholder="公司/单位名称" data-i18n-ph="公司/单位名称"></div>
+      <div class="field"><label data-i18n="公告标题">公告标题</label><input id="nt_title" placeholder="关于……的公告" data-i18n-ph="关于……的公告"><div class="vmsg" id="nt_titleMsg"></div></div>
+      <div class="field"><label data-i18n="公告编号(可选)">公告编号(可选)</label><input id="nt_no" placeholder="如 〔2026〕第 01 号" data-i18n-ph="如 〔2026〕第 01 号"></div>
+      <div class="field"><label data-i18n="正文内容">正文内容</label><textarea id="nt_body" rows="10" placeholder="请输入公告正文,可分多段(用空行分段)" data-i18n-ph="请输入公告正文,可分多段(用空行分段)"></textarea></div>
+      <div class="field"><label data-i18n="落款单位">落款单位</label><input id="nt_signer" placeholder="留空则用发文单位" data-i18n-ph="留空则用发文单位"></div>
+      <div class="field"><label data-i18n="发布日期(留空用今天)">发布日期(留空用今天)</label><input type="date" id="nt_date"></div>
+
+      <p class="note">完全离线运行,不联网、不上传。右侧实时预览,点右上角导出 Word 文档。</p>
+    </div><!-- /noticeForm -->
+
+    <div id="otherForm" style="display:none;">
+      <div class="pal" id="oPalette" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+        <button data-oadd="header">+ 抬头</button>
+        <button data-oadd="heading">+ 标题</button>
+        <button data-oadd="paragraph">+ 段落</button>
+        <button data-oadd="table">+ 信息表</button>
+        <button data-oadd="statement">+ 结论语</button>
+        <button data-oadd="seal">+ 盖章位</button>
+        <button data-oadd="images">+ 图片页</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;">
+        <button class="btn btn-ghost btn-sm" id="oLoadSample" style="flex:1;">载入示例骨架</button>
+        <button class="btn btn-ghost btn-sm" id="oClear" style="flex:1;">清空</button>
+      </div>
+      <div id="oBlocks"></div>
+      <p class="note">自由编排:从上方添加模块,可上移/下移/删除调整顺序与排版。信息表每行可单独开关校验。完全离线,不上传。</p>
+    </div><!-- /otherForm -->
+  </aside><!-- /form -->
+
+  <main class="preview-wrap">
+    <div class="page" id="page">
+      <div id="certPage">
+      <div class="doc-brand"><span id="cpv_brand">公司名称</span> <small id="cpv_brandEn">COMPANY NAME</small></div>
+      <div class="doc-slogan" id="cpv_slogan"></div>
+      <div class="doc-title2" id="cpv_title">员工履历（在职）证明</div>
+      <div class="doc-p" id="cpv_dear">致 申请人：</div>
+      <div class="doc-p"><span id="cpv_intro1">您好！您在 </span><span class="v" id="p_applyDate"></span><span id="cpv_intro2"> 于本单位人事系统申请了关于您本人在我公司的履历（在职）档案调档查询，现作出答复。</span></div>
+      <table class="cert">
+        <tr><td class="k" id="cpv_k_name">姓名</td><td class="val v" id="p_name"></td><td class="k" id="cpv_k_id">身份证明文件号码</td><td class="val v" id="p_idno"></td></tr>
+        <tr><td class="k" id="cpv_k_posType">岗位类型</td><td class="val v" id="p_postType"></td><td class="k" id="cpv_k_posName">岗位名称</td><td class="val v" id="p_postName"></td></tr>
+        <tr><td class="k" id="cpv_k_hire">入职时间</td><td class="val v" id="p_hireDate"></td><td class="k" id="cpv_k_dept">所属部门/公司</td><td class="val v" id="p_dept"></td></tr>
+        <tr><td class="k" id="cpv_k_leave">离职时间</td><td class="val v" id="p_leaveDate"></td><td class="k" id="cpv_k_contact">通讯地址/电邮</td><td class="val v" id="p_contact"></td></tr>
+        <tr><td class="k" id="cpv_k_phone">联系电话</td><td class="val v" id="p_phone"></td><td class="k" id="cpv_k_salary">工资</td><td class="val v" id="p_salary"></td></tr>
+        <tr><td class="k" id="cpv_k_mFax">负责人传真/座机</td><td class="val v" id="p_mFax"></td><td class="k" id="cpv_k_mEmail">负责人电邮</td><td class="val v" id="p_mEmail"></td></tr>
+        <tr><td class="k" id="cpv_k_mName">负责人或上级</td><td class="val v" id="p_mName"></td><td class="k" id="cpv_k_mPhone">负责人电话</td><td class="val v" id="p_mPhone"></td></tr>
+      </table>
+      <div class="doc-p"><span class="em" id="cpv_st1a">据以上履历数据与其上级判断，特此证明</span><span id="cpv_st1b">：员工 </span><span class="blank" id="p_certName"></span><span id="cpv_st1c"> ，工作表现良好，认真负责。该文件以加盖公司公章后为生效依据。复印后应加签员工个人签名后有效。</span></div>
+      <div class="doc-p"><span class="em" id="cpv_st2a">该文件有效期至</span> <span class="blank" id="p_validUntil"></span> <span class="em" id="cpv_st2b">（或其实际离职日期）</span><span id="cpv_st2c">，续期（换开证明）需重新登录本单位人事系统申请。</span></div>
+      <div class="seal" id="cpv_seal">（出具证明单位盖章）</div>
+      <div class="pageno">1</div>
+      </div><!-- /certPage -->
+
+      <div id="approvalPage" style="display:none;">
+        <div class="doc-brand" id="ap_pv_org" style="justify-content:center;border-bottom:2px solid var(--brand);">单位名称</div>
+        <div class="doc-title2" style="margin-top:18px;">审 批 单</div>
+        <table class="cert">
+          <tr><td class="k">申请人</td><td class="val v" id="ap_pv_name"></td><td class="k">所属部门</td><td class="val v" id="ap_pv_dept"></td></tr>
+          <tr><td class="k">申请日期</td><td class="val v" id="ap_pv_date"></td><td class="k">事项类型</td><td class="val v" id="ap_pv_type"></td></tr>
+          <tr><td class="k">起始日期</td><td class="val v" id="ap_pv_start"></td><td class="k">结束日期</td><td class="val v" id="ap_pv_end"></td></tr>
+          <tr><td class="k">金额</td><td class="val v" id="ap_pv_amount"></td><td class="k">审批人</td><td class="val v" id="ap_pv_approver"></td></tr>
+        </table>
+        <div class="doc-p"><span class="em">事由说明：</span><span id="ap_pv_reason"></span></div>
+        <div class="doc-p"><span class="em">备注：</span><span id="ap_pv_remark"></span></div>
+        <div style="margin-top:40px;display:flex;justify-content:space-between;">
+          <div>申请人签字：____________</div>
+          <div>审批人签字：____________</div>
+        </div>
+        <div class="seal" style="margin-top:30px;">（审批单位盖章）</div>
+      </div><!-- /approvalPage -->
+
+      <div id="noticePage" style="display:none;">
+        <div class="doc-brand" id="nt_pv_org" style="justify-content:center;border-bottom:2px solid var(--brand);color:var(--seal);font-size:20px;">发文单位</div>
+        <div class="doc-title2" id="nt_pv_title" style="margin-top:26px;">公告标题</div>
+        <div style="text-align:center;color:#888;font-size:12px;margin-bottom:24px;" id="nt_pv_no"></div>
+        <div id="nt_pv_body" style="text-align:justify;"></div>
+        <div style="text-align:right;margin-top:46px;" id="nt_pv_signer"></div>
+        <div style="text-align:right;margin-top:6px;" id="nt_pv_date"></div>
+      </div><!-- /noticePage -->
+
+      <div id="otherPage" style="display:none;"></div>
+    </div><!-- /page -->
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ i18n 引擎 ============ */
+const I18N_LABEL = {"文档工具": {"zhTW": "文件工具", "en": "Doc Tool"}, "多模板": {"zhTW": "多範本", "en": "Multi-template"}, "模板1 · 在职(履历)证明": {"zhTW": "範本1 · 在職(履歷)證明", "en": "Template 1 · Employment Certificate"}, "模板2 · 审批单申请": {"zhTW": "範本2 · 審批單申請", "en": "Template 2 · Approval Form"}, "模板3 · 公告": {"zhTW": "範本3 · 公告", "en": "Template 3 · Announcement"}, "其他(自由编排 · 模块化编辑)": {"zhTW": "其他(自由編排 · 模組化編輯)", "en": "Other (Free Layout · Modular)"}, "清空": {"zhTW": "清空", "en": "Clear"}, "下载 Word 文档": {"zhTW": "下載 Word 文件", "en": "Download Word"}, "员工信息": {"zhTW": "員工資訊", "en": "Employee Info"}, "负责人信息": {"zhTW": "負責人資訊", "en": "Supervisor Info"}, "证明信息": {"zhTW": "證明資訊", "en": "Certificate Info"}, "证明结尾": {"zhTW": "證明結尾", "en": "Closing"}, "证件影印件(可选,最多 4 张)": {"zhTW": "證件影印件(可選,最多 4 張)", "en": "ID Scans (optional, up to 4)"}, "审批单信息": {"zhTW": "審批單資訊", "en": "Approval Info"}, "抬头设置": {"zhTW": "抬頭設定", "en": "Header Settings"}, "公告信息": {"zhTW": "公告資訊", "en": "Announcement Info"}, "姓名": {"zhTW": "姓名", "en": "Name"}, "证件类型": {"zhTW": "證件類型", "en": "ID Type"}, "身份证明文件号码": {"zhTW": "身分證明文件號碼", "en": "ID Document No."}, "岗位类型": {"zhTW": "崗位類型", "en": "Position Type"}, "岗位名称": {"zhTW": "崗位名稱", "en": "Position Title"}, "入职时间": {"zhTW": "入職時間", "en": "Hire Date"}, "离职状态": {"zhTW": "離職狀態", "en": "Employment Status"}, "离职时间": {"zhTW": "離職時間", "en": "Leave Date"}, "所属部门/公司": {"zhTW": "所屬部門/公司", "en": "Department/Company"}, "通讯地址/电邮": {"zhTW": "通訊地址/電郵", "en": "Address/Email"}, "联系电话": {"zhTW": "聯絡電話", "en": "Phone"}, "工资货币": {"zhTW": "薪資幣別", "en": "Salary Currency"}, "工资数额(留空则 N/A)": {"zhTW": "薪資金額(留空則 N/A)", "en": "Salary Amount (blank = N/A)"}, "负责人传真/座机": {"zhTW": "負責人傳真/座機", "en": "Supervisor Fax/Tel"}, "负责人电邮": {"zhTW": "負責人電郵", "en": "Supervisor Email"}, "负责人或上级": {"zhTW": "負責人或上級", "en": "Supervisor"}, "负责人电话": {"zhTW": "負責人電話", "en": "Supervisor Phone"}, "申请时间(留空则用今天)": {"zhTW": "申請時間(留空則用今天)", "en": "Application Date (blank = today)"}, "证明对象(员工)": {"zhTW": "證明對象(員工)", "en": "Subject (Employee)"}, "有效期至(留空则为申请日期后6个月)": {"zhTW": "有效期至(留空則為申請日期後6個月)", "en": "Valid Until (blank = +6 months)"}, "上传身份证明文件图片": {"zhTW": "上傳身分證明文件圖片", "en": "Upload ID Document Images"}, "请填写具体岗位类型": {"zhTW": "請填寫具體崗位類型", "en": "Specify Position Type"}, "申请人": {"zhTW": "申請人", "en": "Applicant"}, "所属部门": {"zhTW": "所屬部門", "en": "Department"}, "申请日期(留空用今天)": {"zhTW": "申請日期(留空用今天)", "en": "Application Date (blank = today)"}, "审批事项类型": {"zhTW": "審批事項類型", "en": "Approval Type"}, "请填写具体事项": {"zhTW": "請填寫具體事項", "en": "Specify Item"}, "事由说明": {"zhTW": "事由說明", "en": "Reason"}, "金额(可选)": {"zhTW": "金額(可選)", "en": "Amount (optional)"}, "币种": {"zhTW": "幣別", "en": "Currency"}, "起始日期(可选)": {"zhTW": "起始日期(可選)", "en": "Start Date (optional)"}, "结束日期(可选)": {"zhTW": "結束日期(可選)", "en": "End Date (optional)"}, "审批人": {"zhTW": "審批人", "en": "Approver"}, "备注(可选)": {"zhTW": "備註(可選)", "en": "Remark (optional)"}, "单位名称": {"zhTW": "單位名稱", "en": "Organization"}, "发文单位(抬头)": {"zhTW": "發文單位(抬頭)", "en": "Issuer (Header)"}, "公告标题": {"zhTW": "公告標題", "en": "Title"}, "公告编号(可选)": {"zhTW": "公告編號(可選)", "en": "Document No. (optional)"}, "正文内容": {"zhTW": "正文內容", "en": "Body"}, "落款单位": {"zhTW": "落款單位", "en": "Signed By"}, "发布日期(留空用今天)": {"zhTW": "發佈日期(留空用今天)", "en": "Date (blank = today)"}, "中华人民共和国居民身份证": {"zhTW": "中華人民共和國居民身分證", "en": "PRC Resident ID Card"}, "中华人民共和国港澳居民居住证": {"zhTW": "中華人民共和國港澳居民居住證", "en": "PRC HK/Macao Residence Permit"}, "中华人民共和国台湾居民居住证": {"zhTW": "中華人民共和國台灣居民居住證", "en": "PRC Taiwan Residence Permit"}, "中华人民共和国外国人永久居留身份证": {"zhTW": "中華人民共和國外國人永久居留身分證", "en": "PRC Foreign Permanent Resident ID"}, "护照": {"zhTW": "護照", "en": "Passport"}, "港澳居民来往内地通行证": {"zhTW": "港澳居民來往內地通行證", "en": "HK/Macao Mainland Travel Permit"}, "台湾居民来往大陆通行证": {"zhTW": "台灣居民來往大陸通行證", "en": "Taiwan Mainland Travel Permit"}, "其他证件": {"zhTW": "其他證件", "en": "Other Document"}, "在职(显示 N/A)": {"zhTW": "在職(顯示 N/A)", "en": "Employed (show N/A)"}, "已离职(选择日期)": {"zhTW": "已離職(選擇日期)", "en": "Left (pick date)"}, "全职": {"zhTW": "全職", "en": "Full-time"}, "实习": {"zhTW": "實習", "en": "Internship"}, "兼职": {"zhTW": "兼職", "en": "Part-time"}, "其他": {"zhTW": "其他", "en": "Other"}, "请假": {"zhTW": "請假", "en": "Leave"}, "报销": {"zhTW": "報銷", "en": "Reimbursement"}, "采购": {"zhTW": "採購", "en": "Procurement"}, "用章": {"zhTW": "用章", "en": "Seal Use"}, "CN￥ 人民币": {"zhTW": "CN￥ 人民幣", "en": "CN￥ RMB"}, "HK$ 港元": {"zhTW": "HK$ 港元", "en": "HK$ HKD"}, "US$ 美元": {"zhTW": "US$ 美元", "en": "US$ USD"}};
+const I18N_PH = {"张三 或 John": {"zhTW": "張三 或 John", "en": "e.g. John Smith"}, "请输入证件号": {"zhTW": "請輸入證件號", "en": "Enter ID number"}, "如 工程师": {"zhTW": "如 工程師", "en": "e.g. Engineer"}, "请输入具体类型": {"zhTW": "請輸入具體類型", "en": "Enter type"}, "留空显示 +86-400-991-5178": {"zhTW": "留空顯示 +86-400-991-5178", "en": "Blank = +86-400-991-5178"}, "留空显示 N/A": {"zhTW": "留空顯示 N/A", "en": "Blank = N/A"}, "与上方姓名一致": {"zhTW": "與上方姓名一致", "en": "Same as name"}, "自动与姓名一致": {"zhTW": "自動與姓名一致", "en": "Auto-synced with name"}, "张三": {"zhTW": "張三", "en": "e.g. John"}, "如 技术部": {"zhTW": "如 技術部", "en": "e.g. R&D Dept."}, "具体事项类型": {"zhTW": "具體事項類型", "en": "Specific item"}, "简要说明申请事由": {"zhTW": "簡要說明申請事由", "en": "Briefly describe the reason"}, "如 1500": {"zhTW": "如 1500", "en": "e.g. 1500"}, "审批人姓名": {"zhTW": "審批人姓名", "en": "Approver name"}, "备注": {"zhTW": "備註", "en": "Remark"}, "公司/单位名称": {"zhTW": "公司/單位名稱", "en": "Company / organization"}, "关于……的公告": {"zhTW": "關於……的公告", "en": "Announcement on ..."}, "如 〔2026〕第 01 号": {"zhTW": "如 〔2026〕第 01 號", "en": "e.g. No. 01 [2026]"}, "请输入公告正文,可分多段(用空行分段)": {"zhTW": "請輸入公告正文,可分多段(用空行分段)", "en": "Enter body; blank line separates paragraphs"}, "留空则用发文单位": {"zhTW": "留空則用發文單位", "en": "Blank = issuer"}, "如 15000": {"zhTW": "如 15000", "en": "e.g. 15000"}};
+const DOC_STR = {"cert.t1": {"zh": "成员企业", "zhTW": "成員企業", "en": "Member Enterprise"}, "cert.t2": {"zh": "员工履历（在职）证明", "zhTW": "員工履歷（在職）證明", "en": "Employment (Resume) Certificate"}, "cert.dear": {"zh": "致 申请人：", "zhTW": "致 申請人：", "en": "To the Applicant:"}, "cert.intro1": {"zh": "您好！您在 ", "zhTW": "您好！您在 ", "en": "Hello. On "}, "cert.intro2": {"zh": " 于本单位人事系统申请了关于您本人在我公司的履历（在职）档案调档查询，现作出答复。", "zhTW": " 於本單位人事系統申請了關於您本人在我公司的履歷（在職）檔案調檔查詢，現作出答覆。", "en": " you applied via our HR system for an inquiry into your employment (resume) records at our company. Our reply follows."}, "cert.k.name": {"zh": "姓名", "zhTW": "姓名", "en": "Name"}, "cert.k.id": {"zh": "身份证明文件号码", "zhTW": "身分證明文件號碼", "en": "ID Document No."}, "cert.k.posType": {"zh": "岗位类型", "zhTW": "崗位類型", "en": "Position Type"}, "cert.k.posName": {"zh": "岗位名称", "zhTW": "崗位名稱", "en": "Position Title"}, "cert.k.hire": {"zh": "入职时间", "zhTW": "入職時間", "en": "Hire Date"}, "cert.k.dept": {"zh": "所属部门/公司", "zhTW": "所屬部門/公司", "en": "Dept/Company"}, "cert.k.leave": {"zh": "离职时间", "zhTW": "離職時間", "en": "Leave Date"}, "cert.k.contact": {"zh": "通讯地址/电邮", "zhTW": "通訊地址/電郵", "en": "Address/Email"}, "cert.k.phone": {"zh": "联系电话", "zhTW": "聯絡電話", "en": "Phone"}, "cert.k.salary": {"zh": "工资", "zhTW": "薪資", "en": "Salary"}, "cert.k.mFax": {"zh": "负责人传真/座机", "zhTW": "負責人傳真/座機", "en": "Supervisor Fax/Tel"}, "cert.k.mEmail": {"zh": "负责人电邮", "zhTW": "負責人電郵", "en": "Supervisor Email"}, "cert.k.mName": {"zh": "负责人或上级", "zhTW": "負責人或上級", "en": "Supervisor"}, "cert.k.mPhone": {"zh": "负责人电话", "zhTW": "負責人電話", "en": "Supervisor Phone"}, "cert.st1a": {"zh": "据以上履历数据与其上级判断，特此证明", "zhTW": "據以上履歷資料與其上級判斷，特此證明", "en": "Based on the above records and the supervisor's confirmation, we hereby certify"}, "cert.st1b": {"zh": "：员工 ", "zhTW": "：員工 ", "en": ": Employee "}, "cert.st1c": {"zh": " ，工作表现良好，认真负责。该文件以加盖公司公章后为生效依据。复印后应加签员工个人签名后有效。", "zhTW": " ，工作表現良好，認真負責。該文件以加蓋公司公章後為生效依據。影印後應加簽員工個人簽名後有效。", "en": " has performed well and diligently. This document is valid only when stamped with the company seal; copies require the employee's signature."}, "cert.st2a": {"zh": "该文件有效期至", "zhTW": "該文件有效期至", "en": "This document is valid until"}, "cert.st2b": {"zh": "（或其实际离职日期）", "zhTW": "（或其實際離職日期）", "en": " (or the actual leave date)"}, "cert.st2c": {"zh": "，续期（换开证明）需重新登录本单位人事系统申请。", "zhTW": "，續期（換開證明）需重新登入本單位人事系統申請。", "en": ". Renewal requires re-applying via our HR system."}, "cert.seal": {"zh": "（出具证明单位盖章）", "zhTW": "（出具證明單位蓋章）", "en": "(Seal of the issuing unit)"}, "cert.imgcap": {"zh": "身份证明文件影印件", "zhTW": "身分證明文件影印件", "en": "ID Document Copies"}, "ap.title": {"zh": "审 批 单", "zhTW": "審 批 單", "en": "APPROVAL FORM"}, "ap.k.name": {"zh": "申请人", "zhTW": "申請人", "en": "Applicant"}, "ap.k.dept": {"zh": "所属部门", "zhTW": "所屬部門", "en": "Department"}, "ap.k.date": {"zh": "申请日期", "zhTW": "申請日期", "en": "Application Date"}, "ap.k.type": {"zh": "事项类型", "zhTW": "事項類型", "en": "Type"}, "ap.k.start": {"zh": "起始日期", "zhTW": "起始日期", "en": "Start Date"}, "ap.k.end": {"zh": "结束日期", "zhTW": "結束日期", "en": "End Date"}, "ap.k.amount": {"zh": "金额", "zhTW": "金額", "en": "Amount"}, "ap.k.approver": {"zh": "审批人", "zhTW": "審批人", "en": "Approver"}, "ap.reason": {"zh": "事由说明：", "zhTW": "事由說明：", "en": "Reason: "}, "ap.remark": {"zh": "备注：", "zhTW": "備註：", "en": "Remark: "}, "ap.sign": {"zh": "申请人签字：____________          审批人签字：____________", "zhTW": "申請人簽字：____________          審批人簽字：____________", "en": "Applicant: ____________          Approver: ____________"}, "ap.seal": {"zh": "（审批单位盖章）", "zhTW": "（審批單位蓋章）", "en": "(Seal of approving unit)"}, "ap.org": {"zh": "单位名称", "zhTW": "單位名稱", "en": "Organization"}, "nt.title": {"zh": "公告标题", "zhTW": "公告標題", "en": "Title"}, "nt.org": {"zh": "发文单位", "zhTW": "發文單位", "en": "Issuer"}, "o.header": {"zh": "抬头", "zhTW": "抬頭", "en": "Header"}, "o.heading": {"zh": "标题", "zhTW": "標題", "en": "Heading"}, "o.paragraph": {"zh": "段落", "zhTW": "段落", "en": "Paragraph"}, "o.table": {"zh": "信息表", "zhTW": "資訊表", "en": "Table"}, "o.statement": {"zh": "结论语", "zhTW": "結論語", "en": "Statement"}, "o.seal": {"zh": "盖章位", "zhTW": "蓋章位", "en": "Seal"}, "o.images": {"zh": "图片页", "zhTW": "圖片頁", "en": "Image Page"}, "o.imgcap": {"zh": "附件影印件", "zhTW": "附件影印件", "en": "Attachments"}, "o.loadSample": {"zh": "载入示例骨架", "zhTW": "載入範例骨架", "en": "Load Sample"}, "o.clear": {"zh": "清空", "zhTW": "清空", "en": "Clear"}, "toast.ok": {"zh": "已生成并下载", "zhTW": "已生成並下載", "en": "Generated & downloaded"}, "toast.fail": {"zh": "生成失败:", "zhTW": "生成失敗:", "en": "Generation failed: "}};
+
+let LANG = 'zh';
+function T(key){ const e=DOC_STR[key]; if(!e) return key; return e[LANG]||e.zh||key; }
+function tLabel(zh){ if(LANG==='zh') return zh; const e=I18N_LABEL[zh]; return (e&&e[LANG])||zh; }
+function tPh(zh){ if(LANG==='zh') return zh; const e=I18N_PH[zh]; return (e&&e[LANG])||zh; }
+function applyI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const zh=el.getAttribute('data-i18n');
+    // 抬头 logo 含 <small>,单独处理
+    if(el.id==='') {}
+    el.textContent = tLabel(zh);
+  });
+  // appTitle 内含 small,重建
+  const lg=document.querySelector('.logo[data-i18n="文档工具"]');
+  if(lg){ lg.innerHTML = tLabel('文档工具')+' <small>'+tLabel('多模板')+'</small>'; }
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    el.setAttribute('placeholder', tPh(el.getAttribute('data-i18n-ph')));
+  });
+  // cert 预览话术(品牌中性 + 三语)
+  const setTxt=(id,val)=>{ const e=document.getElementById(id); if(e) e.textContent=val; };
+  setTxt('cpv_title', T('cert.t2'));
+  setTxt('cpv_dear', T('cert.dear'));
+  setTxt('cpv_intro1', T('cert.intro1'));
+  setTxt('cpv_intro2', T('cert.intro2'));
+  setTxt('cpv_k_name', T('cert.k.name')); setTxt('cpv_k_id', T('cert.k.id'));
+  setTxt('cpv_k_posType', T('cert.k.posType')); setTxt('cpv_k_posName', T('cert.k.posName'));
+  setTxt('cpv_k_hire', T('cert.k.hire')); setTxt('cpv_k_dept', T('cert.k.dept'));
+  setTxt('cpv_k_leave', T('cert.k.leave')); setTxt('cpv_k_contact', T('cert.k.contact'));
+  setTxt('cpv_k_phone', T('cert.k.phone')); setTxt('cpv_k_salary', T('cert.k.salary'));
+  setTxt('cpv_k_mFax', T('cert.k.mFax')); setTxt('cpv_k_mEmail', T('cert.k.mEmail'));
+  setTxt('cpv_k_mName', T('cert.k.mName')); setTxt('cpv_k_mPhone', T('cert.k.mPhone'));
+  setTxt('cpv_st1a', T('cert.st1a')); setTxt('cpv_st1b', T('cert.st1b')); setTxt('cpv_st1c', T('cert.st1c'));
+  setTxt('cpv_st2a', T('cert.st2a')); setTxt('cpv_st2b', T('cert.st2b')); setTxt('cpv_st2c', T('cert.st2c'));
+  setTxt('cpv_seal', T('cert.seal'));
+  // 审批单预览静态标签
+  setTxt('ap_pv_titleLabel', T('ap.title'));
+  // 公告预览(标题占位)
+  // 自由编排:重渲染编辑器以更新模块名
+  if(typeof oRenderAll==='function' && currentTpl==='other') oRenderAll();
+  // 模板下拉、按钮已由 data-i18n 覆盖
+  document.title = tLabel('文档工具');
+}
+const langSelEl=document.getElementById('langSel');
+langSelEl.addEventListener('change', ()=>{ LANG=langSelEl.value; applyI18n();
+  // 重新渲染当前模板预览(话术随语言变)
+  if(typeof applyTemplate==='function') applyTemplate(currentTpl);
+});
+
+/* ============ 实时预览 ============ */
+const data = {};
+const inputs = document.querySelectorAll('#form input');
+const docTypeSel = document.getElementById('docType');
+const idnoInput = document.getElementById('idnoInput');
+const idnoMsg = document.getElementById('idnoMsg');
+
+/* 含标准出生日期的 18 位中国证件:输入框显示为「地区码 生日 后四位」分组,
+   但校验与文档输出始终用去空格的原始号码 */
+const ID18_TYPES = new Set(['id','hk_residence','tw_residence','foreign_pr']);
+/* 取证件号原始值(去除所有空格) */
+function idnoRaw(){
+  return idnoInput.value.replace(/\s+/g, '').trim();
+}
+/* 把原始号码按 6+8+4 分组(仅对 18 位中国证件;其余原样返回) */
+function formatIdnoDisplay(raw){
+  const r = raw.replace(/\s+/g,'');
+  if(!ID18_TYPES.has(docTypeSel.value)) return r;
+  if(r.length <= 6) return r;
+  if(r.length <= 14) return r.slice(0,6) + ' ' + r.slice(6);
+  return r.slice(0,6) + ' ' + r.slice(6,14) + ' ' + r.slice(14,18) + (r.length>18 ? r.slice(18) : '');
+}
+/* 重排输入框显示,尽量保持光标在末尾(够用,因为多为粘贴或顺序输入) */
+function reformatIdnoInput(){
+  const raw = idnoRaw();
+  const formatted = formatIdnoDisplay(raw);
+  if(idnoInput.value !== formatted){
+    idnoInput.value = formatted;
+  }
+}
+
+/* ---- 证件号校验 ---- */
+// 居民身份证 18 位:含末位校验码计算
+function isValidChinaID(s){
+  if(!/^\d{17}[\dXx]$/.test(s)) return false;
+  // 第 7-14 位(索引 6-13)为出生日期 YYYYMMDD,必须是真实存在的日期
+  const y=+s.slice(6,10), m=+s.slice(10,12), d=+s.slice(12,14);
+  if(y < 1900 || y > new Date().getFullYear()) return false;
+  if(m < 1 || m > 12) return false;
+  const daysInMonth = new Date(y, m, 0).getDate();   // 该年该月实际天数(含闰年2月)
+  if(d < 1 || d > daysInMonth) return false;
+  // 末位校验码
+  const w=[7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2];
+  const check='10X98765432';
+  let sum=0;
+  for(let i=0;i<17;i++) sum += parseInt(s[i],10)*w[i];
+  return check[sum%11] === s[17].toUpperCase();
+}
+
+const ID_HINT = '应为 18 位,第7-14位须为合法出生日期(YYYYMMDD),末位校验码正确';
+const DOC_RULES = {
+  id:           { label:'居民身份证', test:s=>isValidChinaID(s), hint:ID_HINT },
+  hk_residence: { label:'港澳居民居住证', test:s=>isValidChinaID(s), hint:ID_HINT },
+  tw_residence: { label:'台湾居民居住证', test:s=>isValidChinaID(s), hint:ID_HINT },
+  foreign_pr:   { label:'外国人永久居留身份证', test:s=>isValidChinaID(s), hint:ID_HINT },
+  passport:  { label:'护照', test:s=>/^[A-Za-z0-9]{5,17}$/.test(s),
+               hint:'应为 5–17 位字母或数字' },
+  hkmo:      { label:'港澳居民来往内地通行证', test:s=>/^[A-Za-z0-9]{9,11}$/.test(s),
+               hint:'应为 9–11 位字母或数字(如 H/M 开头)' },
+  taiwan:    { label:'台湾居民来往大陆通行证', test:s=>/^[A-Za-z0-9]{8,11}$/.test(s),
+               hint:'应为 8–11 位字母或数字' },
+  other:     { label:'其他证件', test:s=>s.length>0, hint:'请输入证件号(不为空即可)' },
+};
+
+// 返回 {ok, msg}
+function validateID(){
+  const type = docTypeSel.value;
+  const rule = DOC_RULES[type];
+  const val = idnoRaw();
+  if(val === ''){
+    return { ok:false, empty:true, msg:'请输入'+rule.label+'号码 —— '+rule.hint };
+  }
+  if(rule.test(val)){
+    return { ok:true, msg:'✓ '+rule.label+'号码格式正确' };
+  }
+  return { ok:false, msg:'✕ 号码格式不正确:'+rule.hint };
+}
+
+/* 含标准出生日期(第7-14位 YYYYMMDD)的证件类型 */
+const DOB_TYPES = new Set(['id','hk_residence','tw_residence','foreign_pr']);
+
+/* 岗位类型最低周岁要求;'其他' 不校验 */
+const POST_MIN_AGE = { '全职':18, '实习':16, '兼职':12 };
+
+/* 由出生日期(Y,M,D)与基准日(今天)算周岁 */
+function calcAge(y, m, d){
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  const mDiff = (today.getMonth()+1) - m;
+  if(mDiff < 0 || (mDiff === 0 && today.getDate() < d)) age--;
+  return age;
+}
+
+/* 当前岗位类型(其他时取所选字面 '其他') */
+function currentPostType(){
+  return postTypeSel.value;  // 全职/实习/兼职/其他
+}
+
+/* 年龄校验:仅当证件含出生日期且号码已通过格式校验时进行;
+   岗位为"其他"不校验。返回 {ok, msg} */
+function validateAge(){
+  const type = docTypeSel.value;
+  const post = currentPostType();
+  if(post === '其他') return { ok:true };          // 其他:不校验年龄
+  if(!DOB_TYPES.has(type)) return { ok:true };      // 护照等:无标准出生日期,不校验
+  const min = POST_MIN_AGE[post];
+  if(min === undefined) return { ok:true };
+  const val = idnoRaw();
+  if(!DOC_RULES[type].test(val)) return { ok:true }; // 号码本身没通过,交由号码校验提示
+  const y=+val.slice(6,10), m=+val.slice(10,12), d=+val.slice(12,14);
+  const age = calcAge(y, m, d);
+  if(age >= min) return { ok:true, msg:'✓ 年龄 '+age+' 周岁,满足'+post+'要求(≥'+min+')' };
+  return { ok:false, msg:'✕ 年龄 '+age+' 周岁,不满足'+post+'要求(需≥'+min+'周岁)' };
+}
+
+/* 姓名校验:仅限纯中文或纯英文,不可混合;中文≥2字,英文≥2字母 */
+const nameInput = document.getElementById('nameInput');
+const certNameInput = document.getElementById('certNameInput');
+const nameMsg = document.getElementById('nameMsg');
+
+function validateName(){
+  const v = (nameInput.value || '').trim();
+  if(v === '') return { ok:false, empty:true, msg:'请输入姓名(纯中文≥2字 或 纯英文≥2字母,不可混合)' };
+  const hasCJK = /[\u4e00-\u9fff]/.test(v);
+  const hasLatin = /[A-Za-z]/.test(v);
+  // 中文姓名:仅含汉字(允许中间间隔号·,如少数民族姓名)
+  if(hasCJK && !hasLatin){
+    const cjkCount = (v.match(/[\u4e00-\u9fff]/g) || []).length;
+    if(!/^[\u4e00-\u9fff·]+$/.test(v)) return { ok:false, msg:'✕ 中文姓名只能含汉字,不可夹杂其他字符' };
+    if(cjkCount < 2) return { ok:false, msg:'✕ 中文姓名至少需要 2 个汉字' };
+    return { ok:true, msg:'✓ 姓名格式正确(中文)' };
+  }
+  // 英文姓名:仅含字母、空格、连字符、撇号
+  if(hasLatin && !hasCJK){
+    const letters = (v.match(/[A-Za-z]/g) || []).length;
+    if(!/^[A-Za-z][A-Za-z .'\-]*$/.test(v)) return { ok:false, msg:'✕ 英文姓名只能含字母及空格、连字符' };
+    if(letters < 2) return { ok:false, msg:'✕ 英文姓名至少需要 2 个字母' };
+    return { ok:true, msg:'✓ 姓名格式正确(英文)' };
+  }
+  // 同时含中英文 => 混合
+  return { ok:false, msg:'✕ 不可中英文混合输入,请使用纯中文或纯英文' };
+}
+
+function refreshValidation(){
+  // 姓名 -> 证明对象 自动同步
+  certNameInput.value = nameInput.value;
+
+  // 岗位类型:其他 => 显示输入框且必填
+  const isOther = postTypeSel.value === '其他';
+  postTypeOtherField.style.display = isOther ? '' : 'none';
+  let postOk = true;
+  if(isOther){
+    if(postTypeOther.value.trim() === ''){
+      postOk = false;
+      postTypeMsg.textContent = '✕ 选择"其他"时必须填写具体岗位类型';
+      postTypeMsg.className = 'vmsg bad';
+      postTypeOther.classList.add('invalid');
+    } else {
+      postTypeMsg.textContent = '';
+      postTypeOther.classList.remove('invalid');
+    }
+  }
+
+  const rName = validateName();
+  nameMsg.textContent = rName.empty ? rName.msg : rName.msg;
+  nameMsg.className = 'vmsg' + (rName.ok ? ' good' : (nameInput.value.trim()? ' bad':''));
+  nameInput.classList.toggle('invalid', !rName.ok && nameInput.value.trim()!=='');
+
+  const r = validateID();
+  idnoMsg.textContent = r.empty ? rotateHint() : r.msg;
+  idnoMsg.className = 'vmsg' + (r.ok ? ' good' : (idnoRaw()? ' bad':''));
+  idnoInput.classList.toggle('invalid', !r.ok && idnoRaw()!=='');
+
+  // 离职时间须晚于入职时间(仅在已离职且两个日期都已选时校验)
+  const rLeave = validateLeave();
+  const leaveMsgEl = document.getElementById('leaveMsg');
+  const leaveInp = document.getElementById('leaveDateInput');
+  if(leaveMsgEl){
+    leaveMsgEl.textContent = rLeave.msg || '';
+    leaveMsgEl.className = 'vmsg' + (rLeave.ok ? (rLeave.msg?' good':'') : ' bad');
+  }
+  if(leaveInp) leaveInp.classList.toggle('invalid', !rLeave.ok);
+
+  // 工资数额:填写时必须是阿拉伯数字(可含千分位与小数)
+  const rSalary = validateSalary();
+  const salaryMsgEl = document.getElementById('salaryMsg');
+  const salaryInp = document.getElementById('salaryAmt');
+  if(salaryMsgEl){
+    salaryMsgEl.textContent = rSalary.msg || '';
+    salaryMsgEl.className = 'vmsg' + (rSalary.ok ? '' : ' bad');
+  }
+  if(salaryInp) salaryInp.classList.toggle('invalid', !rSalary.ok);
+
+  // 证件影印件:至少 1 张,最多 4 张
+  const rImg = validateImages();
+  const imgMsgEl = document.getElementById('imgMsg');
+  if(imgMsgEl){
+    imgMsgEl.textContent = rImg.msg || '';
+    imgMsgEl.className = 'vmsg' + (rImg.ok ? (uploadedImages.length ? ' good' : '') : ' bad');
+  }
+
+  // 岗位类型年龄要求:显示规则 + 校验结果
+  const ageRuleEl = document.getElementById('ageRuleMsg');
+  const ageMsgEl = document.getElementById('ageMsg');
+  const RULE_TEXT = '年龄要求:全职≥18 / 实习≥16 / 兼职≥12 周岁;其他不校验(基准为当日,取身份证第7-14位)';
+  if(ageRuleEl) ageRuleEl.textContent = RULE_TEXT;
+  const rAge = validateAge();
+  if(ageMsgEl){
+    ageMsgEl.textContent = rAge.msg || '';
+    ageMsgEl.className = 'vmsg' + (rAge.ok ? (rAge.msg?' good':'') : ' bad');
+  }
+
+  const btn = document.getElementById('dlBtn');
+  btn.disabled = !(r.ok && rName.ok && postOk && rLeave.ok && rSalary.ok && rImg.ok && rAge.ok);
+  return r.ok && rName.ok && postOk && rLeave.ok && rSalary.ok && rImg.ok && rAge.ok;
+}
+
+/* 工资数额校验:留空 => 通过(显示 N/A);填写 => 仅允许阿拉伯数字,
+   可带千分位逗号与小数点。如 1826、15000、15,000、1826.50、0.5。
+   首位不能为 0(001832 不通过),但允许 0.xx 这类小于 1 的小数。
+   "一二三"、罗马数字 I、字母等一律不通过 */
+function validateSalary(){
+  const inp = document.getElementById('salaryAmt');
+  const v = inp ? inp.value.trim() : '';
+  if(v === '') return { ok:true };  // 留空 => N/A
+  // 不带千分位:整数部分为 0 或 1-9 开头的非零起始数;允许 0.xx
+  const plain = /^(0|[1-9]\d*)(\.\d+)?$/;
+  // 带千分位:首组 1-3 位且不以 0 开头(除非整体就是 0,这里千分位不适用 0)
+  const grouped = /^[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/;
+  if(plain.test(v) || grouped.test(v)){
+    return { ok:true };
+  }
+  return { ok:false, msg:'✕ 工资数额须为阿拉伯数字且首位不为 0(如 1826,可含千分位或小数)' };
+}
+
+/* 离职晚于入职校验。未选离职(在职)或缺任一日期 => 不校验,视为通过 */
+function validateLeave(){
+  const statusSel = document.getElementById('leaveStatus');
+  const hireInp = document.getElementById('hireDateInput');
+  const leaveInp = document.getElementById('leaveDateInput');
+  if(!statusSel || statusSel.value !== 'left') return { ok:true };  // 在职,不校验
+  const hire = hireInp ? hireInp.value : '';      // YYYY-MM-DD
+  const leave = leaveInp ? leaveInp.value : '';
+  if(!leave) return { ok:true };                  // 未选离职日期,不校验
+  if(!hire) return { ok:true, msg:'提示:已选离职日期,建议同时填写入职时间以便校验' };
+  // YYYY-MM-DD 字符串可直接比较;晚于(严格大于)才通过
+  if(leave > hire) return { ok:true, msg:'✓ 离职时间晚于入职时间' };
+  return { ok:false, msg:'✕ 离职时间必须晚于入职时间' };
+}
+function rotateHint(){
+  return '请选择证件类型并输入号码('+DOC_RULES[docTypeSel.value].hint+')';
+}
+
+/* 把 input[type=date] 的 YYYY-MM-DD 转成 YYYY/MM/DD;空则返回空串 */
+function fmtDate(v){
+  if(!v) return '';
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[1]+'/'+m[2]+'/'+m[3] : v;
+}
+
+const leaveStatusSel = document.getElementById('leaveStatus');
+const leaveDateField = document.getElementById('leaveDateField');
+const leaveDateInput = document.getElementById('leaveDateInput');
+const applyDateInput = document.getElementById('applyDateInput');
+const applyMsg = document.getElementById('applyMsg');
+const validUntilInput = document.getElementById('validUntilInput');
+const validMsg = document.getElementById('validMsg');
+const salaryCurSel = document.getElementById('salaryCur');
+const salaryAmtInput = document.getElementById('salaryAmt');
+const postTypeSel = document.getElementById('postTypeSel');
+const postTypeOtherField = document.getElementById('postTypeOtherField');
+const postTypeOther = document.getElementById('postTypeOther');
+const postTypeMsg = document.getElementById('postTypeMsg');
+
+/* ===== 证件影印件:1–4 张图片 ===== */
+const imgInput = document.getElementById('imgInput');
+const imgMsg = document.getElementById('imgMsg');
+const imgThumbs = document.getElementById('imgThumbs');
+const MAX_IMAGES = 4;
+let uploadedImages = [];  // {bytes:Uint8Array, ext:'png'|'jpeg', w, h, url}
+
+function readImageFile(file){
+  return new Promise((resolve, reject)=>{
+    const ext = file.type === 'image/png' ? 'png' : (file.type === 'image/jpeg' ? 'jpeg' : null);
+    if(!ext){ reject(new Error('仅支持 PNG / JPEG')); return; }
+    const fr = new FileReader();
+    fr.onload = ()=>{
+      const bytes = new Uint8Array(fr.result);
+      const url = URL.createObjectURL(new Blob([bytes], {type:file.type}));
+      const im = new Image();
+      im.onload = ()=>{ resolve({bytes, ext, w:im.naturalWidth, h:im.naturalHeight, url}); };
+      im.onerror = ()=>reject(new Error('图片无法读取'));
+      im.src = url;
+    };
+    fr.onerror = ()=>reject(new Error('文件读取失败'));
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+async function handleImageFiles(fileList){
+  const files = Array.from(fileList);
+  for(const f of files){
+    if(uploadedImages.length >= MAX_IMAGES){
+      toast('最多上传 ' + MAX_IMAGES + ' 张图片');
+      break;
+    }
+    try{ uploadedImages.push(await readImageFile(f)); }
+    catch(e){ toast(e.message); }
+  }
+  imgInput.value = '';   // 允许再次选同一文件
+  renderThumbs();
+  refreshValidation();
+}
+
+function renderThumbs(){
+  imgThumbs.innerHTML = '';
+  uploadedImages.forEach((img, i)=>{
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative;width:80px;height:80px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;';
+    const el = document.createElement('img');
+    el.src = img.url;
+    el.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    const del = document.createElement('button');
+    del.textContent = '×';
+    del.title = '移除';
+    del.style.cssText = 'position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;line-height:1;font-size:14px;';
+    del.onclick = ()=>{ URL.revokeObjectURL(img.url); uploadedImages.splice(i,1); renderThumbs(); refreshValidation(); };
+    box.appendChild(el); box.appendChild(del);
+    imgThumbs.appendChild(box);
+  });
+}
+
+function validateImages(){
+  const n = uploadedImages.length;
+  if(n === 0) return { ok:true, msg:'未上传(将不含影印件页)' };  // 非必填
+  if(n > MAX_IMAGES) return { ok:false, msg:'✕ 最多上传 ' + MAX_IMAGES + ' 张' };
+  return { ok:true, msg:'✓ 已上传 ' + n + ' 张' };
+}
+
+imgInput.addEventListener('change', (e)=>handleImageFiles(e.target.files));
+
+
+/* 在 YYYY/MM/DD 基础上加 N 个月 */
+function addMonths(ymd, n){
+  const m = ymd.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if(!m) return ymd;
+  let y=+m[1], mo=+m[2]-1, d=+m[3];
+  const dt=new Date(y, mo+n, d);
+  // 处理目标月天数不足导致的溢出(如 8/31 + 6 个月 = 2/31 -> 3/3),回退到目标月最后一天
+  if(dt.getDate() !== d){ dt.setDate(0); }
+  const mm=String(dt.getMonth()+1).padStart(2,'0');
+  const dd=String(dt.getDate()).padStart(2,'0');
+  return dt.getFullYear()+'/'+mm+'/'+dd;
+}
+
+/* 今天的日期,格式 YYYY/MM/DD */
+function todayStr(){
+  const d=new Date();
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const dd=String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'/'+mm+'/'+dd;
+}
+
+/* 离职状态切换:已离职才显示日期框 */
+function refreshLeaveUI(){
+  const left = leaveStatusSel.value === 'left';
+  leaveDateField.style.display = left ? '' : 'none';
+}
+
+function sync(){
+  // 证明对象始终等于姓名
+  certNameInput.value = nameInput.value;
+  // 部分字段留空时的默认显示值
+  const FIELD_DEFAULTS = { mName:'N/A', mEmail:'N/A', mPhone:'+86-400-991-5178', mFax:'N/A' };
+  inputs.forEach(inp=>{
+    const k = inp.dataset.k;
+    let val = inp.value.trim();
+    if(k === 'hireDate') val = fmtDate(val);   // 入职日期格式化
+    if(k === 'certName') val = nameInput.value.trim();  // 与姓名互通
+    if(k === 'idno') val = val.replace(/\s+/g,'');  // 证件号去空格存储/输出
+    if(val === '' && FIELD_DEFAULTS[k] !== undefined) val = FIELD_DEFAULTS[k];  // 应用默认值
+    data[k] = val;
+    const cell = document.getElementById('p_'+k);
+    if(cell){
+      if(cell.classList.contains('blank'))
+        cell.textContent = data[k] || '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';
+      else cell.textContent = data[k] || '';
+    }
+  });
+
+  // 离职时间:在职 => N/A;已离职 => 具体日期(未选则暂空)
+  refreshLeaveUI();
+  if(leaveStatusSel.value === 'left'){
+    data.leaveDate = fmtDate(leaveDateInput.value.trim());
+  } else {
+    data.leaveDate = 'N/A';
+  }
+  const leaveCell = document.getElementById('p_leaveDate');
+  if(leaveCell) leaveCell.textContent = data.leaveDate || '';
+
+  // 申请时间:留空则用系统当天
+  if(applyDateInput.value.trim()){
+    data.applyDate = fmtDate(applyDateInput.value.trim());
+    applyMsg.textContent = '';
+  } else {
+    data.applyDate = todayStr();
+    applyMsg.textContent = '未选择,默认使用今天:' + data.applyDate;
+  }
+  const applyCell = document.getElementById('p_applyDate');
+  if(applyCell) applyCell.textContent = data.applyDate;
+
+  // 有效期至:留空则申请日期 + 6 个月
+  if(validUntilInput.value.trim()){
+    data.validUntil = fmtDate(validUntilInput.value.trim());
+    validMsg.textContent = '';
+  } else {
+    data.validUntil = addMonths(data.applyDate, 6);
+    validMsg.textContent = '未选择,默认为申请日期后6个月:' + data.validUntil;
+  }
+  const validCell = document.getElementById('p_validUntil');
+  if(validCell){
+    if(validCell.classList.contains('blank'))
+      validCell.textContent = data.validUntil || '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';
+    else validCell.textContent = data.validUntil || '';
+  }
+
+  // 工资:数额留空 => N/A(以实际为准);填写 => 货币符号 + 数额
+  const CUR_SYMBOL = { CNY:'CN\uFFE5', HKD:'HK$', USD:'US$' };
+  const amt = salaryAmtInput.value.trim();
+  data.salary = amt ? ((CUR_SYMBOL[salaryCurSel.value] || salaryCurSel.value) + ' ' + amt) : 'N/A(以实际为准)';
+  const salaryCell = document.getElementById('p_salary');
+  if(salaryCell) salaryCell.textContent = data.salary;
+
+  // 岗位类型:其他 => 用具体填写内容,否则用所选项
+  data.postType = postTypeSel.value === '其他'
+    ? postTypeOther.value.trim()
+    : postTypeSel.value;
+  const postCell = document.getElementById('p_postType');
+  if(postCell) postCell.textContent = data.postType || '';
+
+  data.docType = docTypeSel.value;
+  refreshValidation();
+}
+inputs.forEach(inp=>inp.addEventListener('input', sync));
+idnoInput.addEventListener('input', reformatIdnoInput);
+docTypeSel.addEventListener('change', ()=>{ reformatIdnoInput(); });
+docTypeSel.addEventListener('change', sync);
+leaveStatusSel.addEventListener('change', sync);
+leaveDateInput.addEventListener('input', sync);
+applyDateInput.addEventListener('input', sync);
+validUntilInput.addEventListener('input', sync);
+salaryCurSel.addEventListener('change', sync);
+salaryAmtInput.addEventListener('input', sync);
+postTypeSel.addEventListener('change', sync);
+postTypeOther.addEventListener('input', sync);
+document.getElementById('resetBtn').onclick = ()=>{
+  inputs.forEach(i=>i.value=''); leaveDateInput.value=''; applyDateInput.value=''; validUntilInput.value='';
+  salaryAmtInput.value=''; salaryCurSel.value='CNY';
+  postTypeSel.value='全职'; postTypeOther.value='';
+  docTypeSel.value='id'; leaveStatusSel.value='active'; sync();
+};
+
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+/* ============ 零依赖 Word 生成 ============ */
+/* 思路:.docx 就是一个 zip,里面是 XML。下面纯手写 zip(store 模式) + docx XML,不引用任何外部库。 */
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; }
+  return t;
+})();
+function crc32(bytes){ let c=0xFFFFFFFF; for(let i=0;i<bytes.length;i++) c=CRC_TABLE[(c^bytes[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+const enc = (s)=>new TextEncoder().encode(s);
+
+function makeZip(files){
+  const chunks=[], central=[]; let offset=0;
+  for(const f of files){
+    const nameBytes=enc(f.name), crc=crc32(f.data), size=f.data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0,true);
+    lh.setUint16(8,0,true); lh.setUint16(10,0,true); lh.setUint16(12,0,true);
+    lh.setUint32(14,crc,true); lh.setUint32(18,size,true); lh.setUint32(22,size,true);
+    lh.setUint16(26,nameBytes.length,true); lh.setUint16(28,0,true);
+    chunks.push(new Uint8Array(lh.buffer), nameBytes, f.data);
+    const cd=new DataView(new ArrayBuffer(46));
+    cd.setUint32(0,0x02014b50,true); cd.setUint16(4,20,true); cd.setUint16(6,20,true);
+    cd.setUint16(8,0,true); cd.setUint16(10,0,true); cd.setUint16(12,0,true); cd.setUint16(14,0,true);
+    cd.setUint32(16,crc,true); cd.setUint32(20,size,true); cd.setUint32(24,size,true);
+    cd.setUint16(28,nameBytes.length,true); cd.setUint16(30,0,true); cd.setUint16(32,0,true);
+    cd.setUint16(34,0,true); cd.setUint16(36,0,true); cd.setUint32(38,0,true); cd.setUint32(42,offset,true);
+    central.push({header:new Uint8Array(cd.buffer), name:nameBytes});
+    offset += 30 + nameBytes.length + size;
+  }
+  const cdStart=offset; let cdSize=0;
+  for(const c of central){ chunks.push(c.header,c.name); cdSize+=c.header.length+c.name.length; }
+  const eocd=new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0,0x06054b50,true); eocd.setUint16(8,central.length,true);
+  eocd.setUint16(10,central.length,true); eocd.setUint32(12,cdSize,true); eocd.setUint32(16,cdStart,true);
+  chunks.push(new Uint8Array(eocd.buffer));
+  let total=0; for(const c of chunks) total+=c.length;
+  const out=new Uint8Array(total); let p=0; for(const c of chunks){ out.set(c,p); p+=c.length; }
+  return out;
+}
+
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// 一个文本 run。bold/underline/color/size 可选。中文用宋体。
+function run(text, o={}){
+  const sz = o.size || 23;
+  const rpr = ['<w:rFonts w:ascii="\u5b8b\u4f53" w:eastAsia="\u5b8b\u4f53" w:hAnsi="\u5b8b\u4f53"/>'];
+  if(o.bold) rpr.push('<w:b/>');
+  if(o.underline) rpr.push('<w:u w:val="single"/>');
+  if(o.color) rpr.push('<w:color w:val="'+o.color+'"/>');
+  rpr.push('<w:sz w:val="'+sz+'"/>');
+  return '<w:r><w:rPr>'+rpr.join('')+'</w:rPr><w:t xml:space="preserve">'+esc(text)+'</w:t></w:r>';
+}
+// 段落。align: center/right; runs 是 run() 字符串数组
+function para(runs, o={}){
+  const ppr=['<w:spacing w:after="'+(o.after!=null?o.after:180)+'" w:line="400" w:lineRule="auto"/>'];
+  if(o.align) ppr.push('<w:jc w:val="'+o.align+'"/>');
+  if(o.border) ppr.push('<w:pBdr><w:bottom w:val="single" w:sz="12" w:space="4" w:color="1F5F8B"/></w:pBdr>');
+  return '<w:p><w:pPr>'+ppr.join('')+'</w:pPr>'+runs.join('')+'</w:p>';
+}
+function cellK(text){
+  return '<w:tc><w:tcPr><w:tcW w:w="1650" w:type="dxa"/><w:shd w:val="clear" w:fill="F0F0F0"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>'
+    +'<w:p><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr>'+run(text,{bold:true,size:22})+'</w:p></w:tc>';
+}
+function cellV(text){
+  return '<w:tc><w:tcPr><w:tcW w:w="3030" w:type="dxa"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr>'
+    +'<w:p><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr>'+run(text||'',{bold:true,size:22,color:"0B3A5C"})+'</w:p></w:tc>';
+}
+function trow(k1,v1,k2,v2){ return '<w:tr><w:trPr><w:trHeight w:val="440" w:hRule="atLeast"/></w:trPr>'+cellK(k1)+cellV(v1)+cellK(k2)+cellV(v2)+'</w:tr>'; }
+
+function buildDocumentXml(){
+  const d=data;
+  const blank=(t)=> (t&&t.length)? t : '\u3000\u3000\u3000\u3000\u3000\u3000';
+  const cellBorder='<w:tcBorders><w:top w:val="single" w:sz="4" w:color="555555"/><w:left w:val="single" w:sz="4" w:color="555555"/><w:bottom w:val="single" w:sz="4" w:color="555555"/><w:right w:val="single" w:sz="4" w:color="555555"/></w:tcBorders>';
+
+  // 表格(给每个 tc 注入边框:简单起见用 tblBorders 统一处理)
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'
+    +'<w:tblBorders>'
+    +'<w:top w:val="single" w:sz="4" w:color="555555"/><w:left w:val="single" w:sz="4" w:color="555555"/>'
+    +'<w:bottom w:val="single" w:sz="4" w:color="555555"/><w:right w:val="single" w:sz="4" w:color="555555"/>'
+    +'<w:insideH w:val="single" w:sz="4" w:color="555555"/><w:insideV w:val="single" w:sz="4" w:color="555555"/>'
+    +'</w:tblBorders></w:tblPr>'
+    +'<w:tblGrid><w:gridCol w:w="1650"/><w:gridCol w:w="3030"/><w:gridCol w:w="1650"/><w:gridCol w:w="3030"/></w:tblGrid>'
+    +trow(T('cert.k.name'),d.name,T('cert.k.id'),d.idno)
+    +trow(T('cert.k.posType'),d.postType,T('cert.k.posName'),d.postName)
+    +trow(T('cert.k.hire'),d.hireDate,T('cert.k.dept'),d.dept)
+    +trow(T('cert.k.leave'),d.leaveDate,T('cert.k.contact'),d.contact)
+    +trow(T('cert.k.phone'),d.phone,T('cert.k.salary'),d.salary)
+    +trow(T('cert.k.mFax'),d.mFax,T('cert.k.mEmail'),d.mEmail)
+    +trow(T('cert.k.mName'),d.mName,T('cert.k.mPhone'),d.mPhone)
+    +'</w:tbl>';
+
+  const body=
+    para([run(T('cert.t1'),{bold:true,size:23})],{align:'center',border:true,after:80})
+    +para([run(T('cert.t2'),{bold:true,size:29})],{align:'center',after:300})
+    +para([run(T('cert.dear'))])
+    +para([
+        run(T('cert.intro1')),
+        run(d.applyDate, {bold:true}),
+        run(T('cert.intro2'))
+      ])
+    +'<w:p><w:pPr><w:spacing w:after="140"/></w:pPr></w:p>'
+    +table
+    +'<w:p><w:pPr><w:spacing w:after="40"/></w:pPr></w:p>'
+    +para([
+        run(T('cert.st1a'),{bold:true}),
+        run(T('cert.st1b')),
+        run(blank(d.certName),{bold:true,underline:true}),
+        run(T('cert.st1c'))
+      ])
+    +para([
+        run(T('cert.st2a'),{bold:true}),
+        run(' '),
+        run(blank(d.validUntil),{bold:true,underline:true}),
+        run(' '),
+        run(T('cert.st2b'),{bold:true}),
+        run(T('cert.st2c'))
+      ])
+    +para([run(T('cert.seal'),{bold:true,color:'B23A2E'})],{align:'right',after:0})
+    ;
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    +' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    +' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
+    +' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+    +' xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+    +'<w:body>'+body
+    + buildImagePages()
+    +'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1280" w:bottom="1440" w:left="1280" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+    +'</w:body></w:document>';
+}
+
+/* 影印件页:分页符 + 标题 + 每张图片(等比缩放到页面可用宽度内) */
+function buildImagePages(){
+  if(!uploadedImages.length) return '';
+  const EMU_PER_PX = 9525;
+  const MAX_W = 9360 * 635;   // 可用宽度 9360 DXA -> EMU(1 DXA=635 EMU)≈ 5943600
+  const MAX_H = 7200 * 635;   // 单图高度上限,避免超出一页
+  let out = '';
+  out += '<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="center"/><w:spacing w:after="200"/></w:pPr>'
+       + run(T('cert.imgcap'), {bold:true, size:26}) + '</w:p>';
+  uploadedImages.forEach((img, i)=>{
+    let cx = img.w * EMU_PER_PX, cy = img.h * EMU_PER_PX;
+    if(cx > MAX_W){ cy = Math.round(cy * MAX_W / cx); cx = MAX_W; }
+    if(cy > MAX_H){ cx = Math.round(cx * MAX_H / cy); cy = MAX_H; }
+    const rid = 'rIdImg' + (i+1);
+    const nm = 'image' + (i+1);
+    out += '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="160"/></w:pPr>'
+      + '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+      + '<wp:extent cx="'+cx+'" cy="'+cy+'"/>'
+      + '<wp:docPr id="'+(i+1)+'" name="'+nm+'"/>'
+      + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+      + '<pic:pic><pic:nvPicPr><pic:cNvPr id="'+(i+1)+'" name="'+nm+'"/><pic:cNvPicPr/></pic:nvPicPr>'
+      + '<pic:blipFill><a:blip r:embed="'+rid+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+      + '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+cx+'" cy="'+cy+'"/></a:xfrm>'
+      + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+      + '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  });
+  return out;
+}
+
+function buildContentTypes(){
+  const exts = new Set(uploadedImages.map(im=>im.ext));  // png / jpeg
+  let defaults = '';
+  if(exts.has('png'))  defaults += '<Default Extension="png" ContentType="image/png"/>';
+  if(exts.has('jpeg')) defaults += '<Default Extension="jpeg" ContentType="image/jpeg"/>';
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    +'<Default Extension="xml" ContentType="application/xml"/>'
+    + defaults
+    +'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+    +'</Types>';
+}
+const RELS='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+  +'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+  +'</Relationships>';
+/* document.xml 的关系:每张图片一条 image 关系 */
+function buildDocRels(){
+  let rels = '';
+  uploadedImages.forEach((img, i)=>{
+    rels += '<Relationship Id="rIdImg'+(i+1)+'" '
+      + 'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+      + 'Target="media/image'+(i+1)+'.'+img.ext+'"/>';
+  });
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + rels + '</Relationships>';
+}
+
+function downloadDocx(){
+  // 硬性拦截:姓名或证件号校验不通过都不允许生成
+  if(!refreshValidation()){
+    const rn = validateName();
+    if(!rn.ok){
+      toast(rn.empty ? '请先填写姓名再生成' : '姓名格式不正确,无法生成');
+      nameInput.focus();
+      return;
+    }
+    if(postTypeSel.value === '其他' && postTypeOther.value.trim() === ''){
+      toast('选择"其他"时请填写具体岗位类型');
+      postTypeOther.focus();
+      return;
+    }
+    if(!validateLeave().ok){
+      toast('离职时间必须晚于入职时间');
+      document.getElementById('leaveDateInput').focus();
+      return;
+    }
+    if(!validateSalary().ok){
+      toast('工资数额只能是阿拉伯数字');
+      salaryAmtInput.focus();
+      return;
+    }
+    if(!validateImages().ok){
+      toast('最多上传 4 张图片');
+      imgInput.focus();
+      return;
+    }
+    if(!validateAge().ok){
+      toast(validateAge().msg.replace(/^✕\s*/,''));
+      idnoInput.focus();
+      return;
+    }
+    const r = validateID();
+    toast(r.empty ? '请先填写证件号码再生成' : '证件号码格式不正确,无法生成');
+    idnoInput.focus();
+    return;
+  }
+  try{
+    const files = [
+      {name:'[Content_Types].xml', data:enc(buildContentTypes())},
+      {name:'_rels/.rels', data:enc(RELS)},
+      {name:'word/_rels/document.xml.rels', data:enc(buildDocRels())},
+      {name:'word/document.xml', data:enc(buildDocumentXml())},
+    ];
+    uploadedImages.forEach((img, i)=>{
+      files.push({name:'word/media/image'+(i+1)+'.'+img.ext, data:img.bytes});
+    });
+    const zip=makeZip(files);
+    const blob=new Blob([zip],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=(data.name? data.name+'-':'')+'\u5728\u804c\u8bc1\u660e.docx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    toast('已生成并下载 Word 文档');
+  }catch(e){
+    toast('生成失败:'+e.message);
+  }
+}
+document.getElementById('dlBtn').onclick = ()=>{
+  if(currentTpl === 'approval') downloadApproval();
+  else if(currentTpl === 'notice') downloadNotice();
+  else if(currentTpl === 'other') downloadOther();
+  else downloadDocx();
+};
+
+/* ================= 模板切换 ================= */
+let currentTpl = 'cert';
+const tplSel = document.getElementById('tplSel');
+function applyTemplate(t){
+  currentTpl = t;
+  const showCert = (t==='cert');
+  const showApproval = (t==='approval');
+  const showNotice = (t==='notice');
+  const showOther = (t==='other');
+  // 表单
+  document.getElementById('certForm').style.display = showCert ? '' : 'none';
+  document.getElementById('approvalForm').style.display = showApproval ? '' : 'none';
+  document.getElementById('noticeForm').style.display = showNotice ? '' : 'none';
+  document.getElementById('otherForm').style.display = showOther ? '' : 'none';
+  // 预览
+  document.getElementById('certPage').style.display = showCert ? '' : 'none';
+  document.getElementById('approvalPage').style.display = showApproval ? '' : 'none';
+  document.getElementById('noticePage').style.display = showNotice ? '' : 'none';
+  document.getElementById('otherPage').style.display = showOther ? '' : 'none';
+  document.getElementById('dlBtn').disabled = false;  // 各模板各自再判定
+  if(showApproval) syncApproval();
+  else if(showNotice) syncNotice();
+  else if(showOther){ if(oDoc.length===0) oDoc=oSample(); oRenderAll(); }
+  else sync();
+}
+tplSel.addEventListener('change', ()=>applyTemplate(tplSel.value));
+/* "其他" = 展示模板1的表单供自由修改,与 cert 同表单同生成,仅语义不同 */
+
+/* ================= 审批单:实时预览 ================= */
+const apEls = {};
+['name','dept','date','type','typeOther','reason','amount','cur','start','end','approver','remark','org']
+  .forEach(k=>apEls[k]=document.getElementById('ap_'+k));
+const apData = {};
+
+function apTodayStr(){
+  const d=new Date(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0');
+  return d.getFullYear()+'/'+mm+'/'+dd;
+}
+function apFmt(v){ if(!v) return ''; const m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?m[1]+'/'+m[2]+'/'+m[3]:v; }
+
+function validateApAmount(){
+  const v=(apEls.amount.value||'').trim(); if(v==='') return {ok:true};
+  if(/^(0|[1-9]\d*)(\.\d+)?$/.test(v)||/^[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(v)) return {ok:true};
+  return {ok:false,msg:'✕ 金额须为阿拉伯数字且首位非0'};
+}
+function validateApDates(){
+  const s=apEls.start.value, e=apEls.end.value;
+  if(!s||!e) return {ok:true};
+  if(e>=s) return {ok:true};
+  return {ok:false,msg:'✕ 结束日期不能早于起始日期'};
+}
+
+function syncApproval(){
+  const d=apData;
+  d.org = apEls.org.value.trim() || '单位名称';
+  d.name = apEls.name.value.trim();
+  d.dept = apEls.dept.value.trim();
+  d.date = apEls.date.value.trim() ? apFmt(apEls.date.value) : apTodayStr();
+  // 类型(其他时取具体)
+  const isOther = apEls.type.value === '其他';
+  document.getElementById('ap_typeOtherField').style.display = isOther ? '' : 'none';
+  d.type = isOther ? (apEls.typeOther.value.trim() || '其他') : apEls.type.value;
+  d.reason = apEls.reason.value.trim();
+  d.remark = apEls.remark.value.trim() || 'N/A';
+  d.start = apFmt(apEls.start.value) || 'N/A';
+  d.end = apFmt(apEls.end.value) || 'N/A';
+  d.approver = apEls.approver.value.trim() || 'N/A';
+  // 金额
+  const amt = apEls.amount.value.trim();
+  d.amount = amt ? (apEls.cur.value + ' ' + amt) : 'N/A';
+
+  // 校验提示
+  const rAmt = validateApAmount();
+  const amtMsg = document.getElementById('ap_amtMsg');
+  amtMsg.textContent = rAmt.ok ? '' : rAmt.msg; amtMsg.className='vmsg'+(rAmt.ok?'':' bad');
+  apEls.amount.classList.toggle('invalid', !rAmt.ok);
+  const rDate = validateApDates();
+  const dMsg = document.getElementById('ap_dateMsg');
+  dMsg.textContent = rDate.ok ? '' : rDate.msg; dMsg.className='vmsg'+(rDate.ok?'':' bad');
+
+  // 预览填充
+  const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.textContent=val; };
+  document.getElementById('ap_pv_org').firstChild ? (document.getElementById('ap_pv_org').textContent=d.org) : null;
+  set('ap_pv_name', d.name); set('ap_pv_dept', d.dept); set('ap_pv_date', d.date);
+  set('ap_pv_type', d.type); set('ap_pv_start', d.start); set('ap_pv_end', d.end);
+  set('ap_pv_amount', d.amount); set('ap_pv_approver', d.approver);
+  set('ap_pv_reason', d.reason); set('ap_pv_remark', d.remark);
+
+  const ok = rAmt.ok && rDate.ok && d.name!=='' ;
+  document.getElementById('dlBtn').disabled = !ok;
+}
+// 绑定审批单输入
+Object.values(apEls).forEach(el=>{ if(el){ el.addEventListener('input', syncApproval); el.addEventListener('change', syncApproval); } });
+
+/* ================= 审批单:docx 生成 ================= */
+function apCellK(t){ return '<w:tc><w:tcPr><w:tcW w:w="1650" w:type="dxa"/><w:shd w:val="clear" w:fill="F0F0F0"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr>'+run(t,{bold:true,size:22})+'</w:p></w:tc>'; }
+function apCellV(t){ return '<w:tc><w:tcPr><w:tcW w:w="3030" w:type="dxa"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr>'+run(t||'',{bold:true,size:22,color:'0B3A5C'})+'</w:p></w:tc>'; }
+function apRow(k1,v1,k2,v2){ return '<w:tr><w:trPr><w:trHeight w:val="440" w:hRule="atLeast"/></w:trPr>'+apCellK(k1)+apCellV(v1)+apCellK(k2)+apCellV(v2)+'</w:tr>'; }
+
+function buildApprovalDoc(){
+  const d=apData;
+  const border='<w:tblBorders><w:top w:val="single" w:sz="4" w:color="555555"/><w:left w:val="single" w:sz="4" w:color="555555"/><w:bottom w:val="single" w:sz="4" w:color="555555"/><w:right w:val="single" w:sz="4" w:color="555555"/><w:insideH w:val="single" w:sz="4" w:color="555555"/><w:insideV w:val="single" w:sz="4" w:color="555555"/></w:tblBorders>';
+  const table='<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'+border+'</w:tblPr>'
+    +'<w:tblGrid><w:gridCol w:w="1650"/><w:gridCol w:w="3030"/><w:gridCol w:w="1650"/><w:gridCol w:w="3030"/></w:tblGrid>'
+    +apRow(T('ap.k.name'),d.name,T('ap.k.dept'),d.dept)
+    +apRow(T('ap.k.date'),d.date,T('ap.k.type'),d.type)
+    +apRow(T('ap.k.start'),d.start,T('ap.k.end'),d.end)
+    +apRow(T('ap.k.amount'),d.amount,T('ap.k.approver'),d.approver)
+    +'</w:tbl>';
+  const body=
+    para([run(d.org,{bold:true,size:28,color:'1F5F8B'})],{align:'center',border:true})
+    +para([run(T('ap.title'),{bold:true,size:32})],{align:'center',after:300})
+    +'<w:p><w:pPr><w:spacing w:after="140"/></w:pPr></w:p>'
+    +table
+    +'<w:p><w:pPr><w:spacing w:after="40"/></w:pPr></w:p>'
+    +para([run(T('ap.reason'),{bold:true}),run(d.reason)])
+    +para([run(T('ap.remark'),{bold:true}),run(d.remark)])
+    +para([run(T('ap.sign'))],{after:200})
+    +para([run(T('ap.seal'),{bold:true,color:'B23A2E'})],{align:'right',after:0});
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    +'<w:body>'+body
+    +'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1280" w:bottom="1440" w:left="1280" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+    +'</w:body></w:document>';
+}
+function downloadApproval(){
+  syncApproval();
+  if(!validateApAmount().ok){ toast('金额格式不正确'); return; }
+  if(!validateApDates().ok){ toast('结束日期不能早于起始日期'); return; }
+  if(apData.name===''){ toast('请填写申请人'); return; }
+  try{
+    const CT='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      +'<Default Extension="xml" ContentType="application/xml"/>'
+      +'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+    const zip=makeZip([
+      {name:'[Content_Types].xml', data:enc(CT)},
+      {name:'_rels/.rels', data:enc(RELS)},
+      {name:'word/document.xml', data:enc(buildApprovalDoc())},
+    ]);
+    const blob=new Blob([zip],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=(apData.name?apData.name+'-':'')+'审批单.docx'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('已生成并下载');
+  }catch(e){ toast('生成失败:'+e.message); }
+}
+
+/* ================= 公告:实时预览 ================= */
+const ntEls = {};
+['org','title','no','body','signer','date'].forEach(k=>ntEls[k]=document.getElementById('nt_'+k));
+const ntData = {};
+function ntTodayStr(){ const d=new Date(); const mm=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'; }
+function ntFmtCN(v){ if(!v) return ntTodayStr(); const m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/); return m? (m[1]+'年'+ (+m[2]) +'月'+ (+m[3]) +'日') : v; }
+
+function syncNotice(){
+  const d=ntData;
+  d.org = ntEls.org.value.trim() || '发文单位';
+  d.title = ntEls.title.value.trim();
+  d.no = ntEls.no.value.trim();
+  d.body = ntEls.body.value.replace(/\r/g,'');
+  d.signer = ntEls.signer.value.trim() || d.org;
+  d.date = ntFmtCN(ntEls.date.value);
+
+  // 标题非空校验
+  const tMsg=document.getElementById('nt_titleMsg');
+  const titleOk = d.title!=='';
+  tMsg.textContent = titleOk?'':'✕ 公告标题不能为空'; tMsg.className='vmsg'+(titleOk?'':' bad');
+  ntEls.title.classList.toggle('invalid', !titleOk);
+
+  // 预览
+  document.getElementById('nt_pv_org').textContent = d.org;
+  document.getElementById('nt_pv_title').textContent = d.title || '公告标题';
+  document.getElementById('nt_pv_no').textContent = d.no;
+  // 正文按空行分段
+  const bodyHost=document.getElementById('nt_pv_body'); bodyHost.innerHTML='';
+  const paras = d.body.split(/\n\s*\n/).map(s=>s.trim()).filter(s=>s.length);
+  if(paras.length===0){ bodyHost.innerHTML='<span class="empty-hint">(正文为空)</span>'; }
+  else paras.forEach(p=>{ const el=document.createElement('div'); el.className='doc-p'; el.style.textIndent='2em'; el.textContent=p; bodyHost.appendChild(el); });
+  document.getElementById('nt_pv_signer').textContent = d.signer;
+  document.getElementById('nt_pv_date').textContent = d.date;
+
+  document.getElementById('dlBtn').disabled = !titleOk;
+}
+Object.values(ntEls).forEach(el=>{ if(el){ el.addEventListener('input', syncNotice); el.addEventListener('change', syncNotice); } });
+
+/* ================= 公告:docx 生成 ================= */
+function buildNoticeDoc(){
+  const d=ntData;
+  let body =
+    para([run(d.org,{bold:true,size:30,color:'B23A2E'})],{align:'center',border:true,after:240})
+    +para([run(d.title,{bold:true,size:32})],{align:'center',after:(d.no?80:300)});
+  if(d.no) body += para([run(d.no,{size:20,color:'666666'})],{align:'center',after:300});
+  // 正文分段,首行缩进
+  const paras = d.body.split(/\n\s*\n/).map(s=>s.trim()).filter(s=>s.length);
+  paras.forEach(p=>{ body += '<w:p><w:pPr><w:spacing w:after="160" w:line="400" w:lineRule="auto"/><w:ind w:firstLine="480"/></w:pPr>'+run(p)+'</w:p>'; });
+  // 落款 + 日期 右对齐
+  body += '<w:p><w:pPr><w:spacing w:before="400" w:after="40"/><w:jc w:val="right"/></w:pPr>'+run(d.signer,{bold:true})+'</w:p>';
+  body += para([run(d.date)],{align:'right',after:0});
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    +'<w:body>'+body
+    +'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1280" w:bottom="1440" w:left="1280" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>'
+    +'</w:body></w:document>';
+}
+function downloadNotice(){
+  syncNotice();
+  if(ntData.title===''){ toast('请填写公告标题'); return; }
+  try{
+    const CT='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      +'<Default Extension="xml" ContentType="application/xml"/>'
+      +'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+    const zip=makeZip([
+      {name:'[Content_Types].xml', data:enc(CT)},
+      {name:'_rels/.rels', data:enc(RELS)},
+      {name:'word/document.xml', data:enc(buildNoticeDoc())},
+    ]);
+    const blob=new Blob([zip],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=(ntData.title?ntData.title:'公告')+'.docx'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('已生成并下载');
+  }catch(e){ toast('生成失败:'+e.message); }
+}
+
+/* ================= 其他模板:自由编排编辑器 ================= */
+let oUid=1; const oNextId=()=>'o'+(oUid++);
+function oEscHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+let oDoc=[];
+
+function O_TYPE_NAME(t){ return T('o.'+t); }
+const O_VALIDATORS={
+  none:{label:'不校验', fn:()=>({ok:true})},
+  name:{label:'姓名(纯中/英,≥2)', fn:oValName},
+  id18:{label:'18位中国证件', fn:v=>{ const r=oIsID(v.replace(/\s+/g,'')); return {ok:r,msg:r?'':'✕ 应为18位,出生日期合法且校验码正确'}; }},
+  number:{label:'数字(首位非0)', fn:oValNum},
+  email:{label:'电子邮箱', fn:v=>({ok:/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),msg:/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)?'':'✕ 邮箱格式不正确'})},
+};
+function oValName(v){ v=(v||'').trim(); if(v==='')return{ok:false,msg:'✕ 不能为空'};
+  const cjk=/[\u4e00-\u9fff]/.test(v),lat=/[A-Za-z]/.test(v);
+  if(cjk&&!lat){ if(!/^[\u4e00-\u9fff·]+$/.test(v))return{ok:false,msg:'✕ 中文名只能含汉字'}; if((v.match(/[\u4e00-\u9fff]/g)||[]).length<2)return{ok:false,msg:'✕ 中文名至少2字'}; return{ok:true}; }
+  if(lat&&!cjk){ if(!/^[A-Za-z][A-Za-z .'\-]*$/.test(v))return{ok:false,msg:'✕ 英文名只能含字母及空格连字符'}; if((v.match(/[A-Za-z]/g)||[]).length<2)return{ok:false,msg:'✕ 英文名至少2字母'}; return{ok:true}; }
+  return {ok:false,msg:'✕ 不可中英文混合'}; }
+function oValNum(v){ v=(v||'').trim(); if(v==='')return{ok:true};
+  if(/^(0|[1-9]\d*)(\.\d+)?$/.test(v)||/^[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(v))return{ok:true};
+  return{ok:false,msg:'✕ 须为阿拉伯数字且首位非0'}; }
+function oIsID(s){ if(!/^\d{17}[\dXx]$/.test(s))return false;
+  const y=+s.slice(6,10),m=+s.slice(10,12),d=+s.slice(12,14);
+  if(y<1900||y>new Date().getFullYear())return false; if(m<1||m>12)return false; if(d<1||d>new Date(y,m,0).getDate())return false;
+  const w=[7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2],c='10X98765432'; let su=0; for(let i=0;i<17;i++)su+=parseInt(s[i],10)*w[i];
+  return c[su%11]===s[17].toUpperCase(); }
+
+function oSample(){ return [
+  {id:oNextId(),type:'header',logo:null,name:'公司名称',en:'COMPANY NAME',slogan:'公司标语(可选)'},
+  {id:oNextId(),type:'heading',text:'文档标题',size:'large'},
+  {id:oNextId(),type:'paragraph',text:'在此输入正文内容。'},
+  {id:oNextId(),type:'table',rows:[{k:'字段名',v:'',validate:'none'}]},
+  {id:oNextId(),type:'statement',text:'结论或声明语。'},
+  {id:oNextId(),type:'seal',text:'(盖章)'},
+]; }
+function oNew(type){ switch(type){
+  case 'header':return{id:oNextId(),type,logo:null,name:'公司名称',en:'',slogan:''};
+  case 'heading':return{id:oNextId(),type,text:'标题',size:'large'};
+  case 'paragraph':return{id:oNextId(),type,text:''};
+  case 'statement':return{id:oNextId(),type,text:''};
+  case 'seal':return{id:oNextId(),type,text:'(盖章)'};
+  case 'table':return{id:oNextId(),type,rows:[{k:'字段名',v:'',validate:'none'}]};
+  case 'images':return{id:oNextId(),type,images:[]};
+} }
+
+function oRenderEditor(){
+  const host=document.getElementById('oBlocks'); host.innerHTML='';
+  oDoc.forEach((b,idx)=>{
+    const el=document.createElement('div'); el.className='oblock';
+    el.innerHTML=`<div class="oblock-head"><span class="ttl">${O_TYPE_NAME(b.type)}</span><span class="tag">#${idx+1}</span>
+      <button data-act="up" ${idx===0?'disabled':''}>▲</button>
+      <button data-act="down" ${idx===oDoc.length-1?'disabled':''}>▼</button>
+      <button data-act="del">✕</button></div>
+      <div class="oblock-body">${oEditorBody(b)}</div>`;
+    el.querySelector('[data-act=up]').onclick=()=>{ if(idx>0){[oDoc[idx-1],oDoc[idx]]=[oDoc[idx],oDoc[idx-1]];oRenderAll();} };
+    el.querySelector('[data-act=down]').onclick=()=>{ if(idx<oDoc.length-1){[oDoc[idx+1],oDoc[idx]]=[oDoc[idx],oDoc[idx+1]];oRenderAll();} };
+    el.querySelector('[data-act=del]').onclick=()=>{ oDoc.splice(idx,1); oRenderAll(); };
+    oBindEditor(el,b); host.appendChild(el);
+  });
+}
+function oEditorBody(b){ switch(b.type){
+  case 'header': return `<label class="lab">Logo 图片(可选)</label><input type="file" data-f="logo" accept="image/png,image/jpeg"><div data-thumb></div>
+    <label class="lab">公司名称(抬头主文字)</label><input type="text" data-f="name" value="${oEscHtml(b.name)}">
+    <label class="lab">英文名/副标题(可选)</label><input type="text" data-f="en" value="${oEscHtml(b.en)}">
+    <label class="lab">标语(可选)</label><input type="text" data-f="slogan" value="${oEscHtml(b.slogan)}">`;
+  case 'heading': return `<label class="lab">标题文字</label><input type="text" data-f="text" value="${oEscHtml(b.text)}">
+    <label class="lab">字号</label><select data-f="size"><option value="large" ${b.size==='large'?'selected':''}>大</option><option value="medium" ${b.size==='medium'?'selected':''}>中</option><option value="small" ${b.size==='small'?'selected':''}>小</option></select>`;
+  case 'paragraph': case 'statement': return `<label class="lab">正文内容</label><textarea data-f="text">${oEscHtml(b.text)}</textarea>`;
+  case 'seal': return `<label class="lab">盖章位文字(右对齐)</label><input type="text" data-f="text" value="${oEscHtml(b.text)}">`;
+  case 'table': return oTableEditor(b);
+  case 'images': return `<label class="lab">上传图片(最多 4 张)</label><input type="file" data-f="imgadd" accept="image/png,image/jpeg" multiple><div data-thumb></div>`;
+} }
+function oTableEditor(b){
+  let rows=b.rows.map((r,i)=>`<div class="othree" data-row="${i}" style="margin-bottom:6px;">
+    <input type="text" data-rk placeholder="字段名" value="${oEscHtml(r.k)}">
+    <input type="text" data-rv placeholder="内容" value="${oEscHtml(r.v)}">
+    <button class="orow-del" data-rdel>✕</button>
+    <div style="grid-column:1 / -1;"><span class="oinline-opt">校验:
+      <select data-rval style="width:auto;">${Object.keys(O_VALIDATORS).map(k=>`<option value="${k}" ${(r.validate||'none')===k?'selected':''}>${O_VALIDATORS[k].label}</option>`).join('')}</select>
+    </span><div class="vmsg" data-rmsg></div></div></div>`).join('');
+  return rows+`<button class="oadd-row" data-addrow>+ 添加字段行</button>`;
+}
+function oBindEditor(el,b){
+  el.querySelectorAll('[data-f]').forEach(inp=>{ const f=inp.dataset.f;
+    if(inp.type==='file'){ inp.addEventListener('change',e=>oHandleFile(b,f,e.target.files)); }
+    else { inp.addEventListener('input',()=>{ b[f]=inp.value; oRenderPreview(); }); inp.addEventListener('change',()=>{ b[f]=inp.value; oRenderPreview(); }); }
+  });
+  if(b.type==='table'){
+    el.querySelectorAll('[data-row]').forEach(rowEl=>{ const i=+rowEl.dataset.row;
+      rowEl.querySelector('[data-rk]').addEventListener('input',e=>{ b.rows[i].k=e.target.value; oRenderPreview(); });
+      rowEl.querySelector('[data-rv]').addEventListener('input',e=>{ b.rows[i].v=e.target.value; oRowValidate(rowEl,b.rows[i]); oRenderPreview(); });
+      rowEl.querySelector('[data-rval]').addEventListener('change',e=>{ b.rows[i].validate=e.target.value; oRowValidate(rowEl,b.rows[i]); });
+      rowEl.querySelector('[data-rdel]').onclick=()=>{ b.rows.splice(i,1); oRenderAll(); };
+      oRowValidate(rowEl,b.rows[i]);
+    });
+    el.querySelector('[data-addrow]').onclick=()=>{ b.rows.push({k:'字段名',v:'',validate:'none'}); oRenderAll(); };
+  }
+  if(b.type==='header'||b.type==='images') oRenderThumbs(el,b);
+}
+function oRowValidate(rowEl,row){
+  const msg=rowEl.querySelector('[data-rmsg]'), inp=rowEl.querySelector('[data-rv]'); const key=row.validate||'none';
+  if(key==='none'||(row.v||'')===''){ msg.textContent=''; msg.className='vmsg'; inp.classList.remove('invalid'); return true; }
+  const r=O_VALIDATORS[key].fn(row.v);
+  msg.textContent=r.ok?'✓ 校验通过':(r.msg||'✕ 不通过'); msg.className='vmsg '+(r.ok?'good':'bad'); inp.classList.toggle('invalid',!r.ok);
+  return r.ok;
+}
+function oReadImage(file){ return new Promise((res,rej)=>{
+  const ext=file.type==='image/png'?'png':(file.type==='image/jpeg'?'jpeg':null); if(!ext){rej(new Error('仅支持 PNG / JPEG'));return;}
+  const fr=new FileReader(); fr.onload=()=>{ const bytes=new Uint8Array(fr.result); const url=URL.createObjectURL(new Blob([bytes],{type:file.type}));
+    const im=new Image(); im.onload=()=>res({bytes,ext,w:im.naturalWidth,h:im.naturalHeight,url}); im.onerror=()=>rej(new Error('图片读取失败')); im.src=url; };
+  fr.onerror=()=>rej(new Error('文件读取失败')); fr.readAsArrayBuffer(file);
+}); }
+async function oHandleFile(b,f,fileList){ const files=Array.from(fileList);
+  if(f==='logo'){ try{ b.logo=await oReadImage(files[0]); }catch(e){ toast(e.message); } oRenderAll(); return; }
+  if(f==='imgadd'){ for(const file of files){ if(b.images.length>=4){toast('最多 4 张');break;} try{ b.images.push(await oReadImage(file)); }catch(e){ toast(e.message); } } oRenderAll(); return; }
+}
+function oRenderThumbs(el,b){ const host=el.querySelector('[data-thumb]'); if(!host)return; host.innerHTML='';
+  const list=b.type==='header'?(b.logo?[b.logo]:[]):b.images;
+  list.forEach((img,i)=>{ const t=document.createElement('span'); t.className='othumb'; t.innerHTML=`<img src="${img.url}">`;
+    const del=document.createElement('button'); del.textContent='×'; del.onclick=()=>{ if(b.type==='header'){b.logo=null;}else{b.images.splice(i,1);} oRenderAll(); };
+    t.appendChild(del); host.appendChild(t); });
+}
+function oRenderPreview(){
+  const page=document.getElementById('otherPage'); page.innerHTML='';
+  if(oDoc.length===0){ page.innerHTML='<div class="empty-hint">从上方添加模块,或点击「载入示例骨架」开始。</div>'; return; }
+  oDoc.forEach(b=>page.insertAdjacentHTML('beforeend',oPreviewBlock(b)));
+}
+function oPreviewBlock(b){ switch(b.type){
+  case 'header':{ const logo=b.logo?`<img src="${b.logo.url}">`:''; const en=b.en?` <span class="hen">${oEscHtml(b.en)}</span>`:''; const sl=b.slogan?`<div class="pv-slogan">${oEscHtml(b.slogan)}</div>`:'';
+    return `<div class="pv-header">${logo}<div><span class="hname">${oEscHtml(b.name||'')}</span>${en}</div></div>${sl}`; }
+  case 'heading':{ const sz=b.size==='large'?'19px':(b.size==='medium'?'16px':'14px'); return `<div class="pv-heading" style="font-size:${sz}">${oEscHtml(b.text||'')}</div>`; }
+  case 'paragraph': return `<div class="pv-p">${oEscHtml(b.text||'')||'<span class="empty-hint">(空段落)</span>'}</div>`;
+  case 'statement': return `<div class="pv-p"><strong>${oEscHtml(b.text||'')}</strong></div>`;
+  case 'seal': return `<div class="pv-seal">${oEscHtml(b.text||'')}</div>`;
+  case 'table':{ let h='<table class="pv-table">'; for(let i=0;i<b.rows.length;i+=2){ const a=b.rows[i],c=b.rows[i+1]; h+='<tr>'+`<td class="k">${oEscHtml(a.k)}</td><td class="v">${oEscHtml(a.v)}</td>`+(c?`<td class="k">${oEscHtml(c.k)}</td><td class="v">${oEscHtml(c.v)}</td>`:`<td class="k"></td><td class="v"></td>`)+'</tr>'; } return h+'</table>'; }
+  case 'images':{ if(!b.images.length)return '<div class="pv-imgs"><span class="empty-hint">(图片页:未上传图片)</span></div>'; return '<div class="pv-imgs"><div class="cap">附件影印件</div>'+b.images.map(im=>`<img src="${im.url}">`).join('')+'</div>'; }
+} }
+function oRenderAll(){ oRenderEditor(); oRenderPreview(); }
+
+document.getElementById('oPalette').querySelectorAll('[data-oadd]').forEach(btn=>{ btn.onclick=()=>{ oDoc.push(oNew(btn.dataset.oadd)); oRenderAll(); }; });
+document.getElementById('oLoadSample').onclick=()=>{ oDoc=oSample(); oRenderAll(); };
+document.getElementById('oClear').onclick=()=>{ oDoc=[]; oRenderAll(); };
+
+/* 其他模板:docx 生成(复用 run/para/makeZip/enc) */
+function oDrawing(img,maxW,maxH){ const EMU=9525; let cx=img.w*EMU,cy=img.h*EMU;
+  if(cx>maxW){cy=Math.round(cy*maxW/cx);cx=maxW;} if(maxH&&cy>maxH){cx=Math.round(cx*maxH/cy);cy=maxH;}
+  return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="'+cx+'" cy="'+cy+'"/><wp:docPr id="1" name="'+img._media+'"/>'
+    +'<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="'+img._media+'"/><pic:cNvPicPr/></pic:nvPicPr>'
+    +'<pic:blipFill><a:blip r:embed="'+img._rid+'"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+    +'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+cx+'" cy="'+cy+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+}
+function oCollectImages(){ const imgs=[]; oDoc.forEach(b=>{ if(b.type==='header'&&b.logo){ b.logo._rid='rIdImg'+(imgs.length+1); b.logo._media='image'+(imgs.length+1)+'.'+b.logo.ext; imgs.push(b.logo); } if(b.type==='images'){ b.images.forEach(im=>{ im._rid='rIdImg'+(imgs.length+1); im._media='image'+(imgs.length+1)+'.'+im.ext; imgs.push(im); }); } }); return imgs; }
+function oBuildBody(){ let xml='';
+  oDoc.forEach(b=>{ switch(b.type){
+    case 'header':{ const runs=[]; if(b.logo){ runs.push(oDrawing(b.logo,1200000,600000)); runs.push(run('  ')); } if(b.name) runs.push(run(b.name+(b.en?'  '+b.en:''),{bold:true,size:26,color:'1F5F8B'})); xml+=para(runs,{border:true}); if(b.slogan) xml+=para([run(b.slogan,{size:19,color:'666666'})],{align:'center',after:240}); break; }
+    case 'heading':{ const sz=b.size==='large'?30:(b.size==='medium'?26:23); xml+=para([run(b.text,{bold:true,size:sz})],{align:'center',after:260}); break; }
+    case 'paragraph': xml+=para([run(b.text)]); break;
+    case 'statement': xml+=para([run(b.text,{bold:true})]); break;
+    case 'seal': xml+=para([run(b.text,{bold:true,color:'B23A2E'})],{align:'right',after:0}); break;
+    case 'table':{ const bd='<w:tblBorders><w:top w:val="single" w:sz="4" w:color="555555"/><w:left w:val="single" w:sz="4" w:color="555555"/><w:bottom w:val="single" w:sz="4" w:color="555555"/><w:right w:val="single" w:sz="4" w:color="555555"/><w:insideH w:val="single" w:sz="4" w:color="555555"/><w:insideV w:val="single" w:sz="4" w:color="555555"/></w:tblBorders>';
+      let t='<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>'+bd+'</w:tblPr><w:tblGrid><w:gridCol w:w="1650"/><w:gridCol w:w="3030"/><w:gridCol w:w="1650"/><w:gridCol w:w="3030"/></w:tblGrid>';
+      const cK=tx=>'<w:tc><w:tcPr><w:tcW w:w="1650" w:type="dxa"/><w:shd w:val="clear" w:fill="F0F0F0"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr>'+run(tx,{bold:true,size:22})+'</w:p></w:tc>';
+      const cV=tx=>'<w:tc><w:tcPr><w:tcW w:w="3030" w:type="dxa"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:spacing w:after="0" w:line="276" w:lineRule="auto"/></w:pPr>'+run(tx||'',{bold:true,size:22,color:'0B3A5C'})+'</w:p></w:tc>';
+      for(let i=0;i<b.rows.length;i+=2){ const a=b.rows[i],c=b.rows[i+1]; t+='<w:tr><w:trPr><w:trHeight w:val="440" w:hRule="atLeast"/></w:trPr>'+cK(a.k)+cV(a.v)+(c?cK(c.k)+cV(c.v):cK('')+cV(''))+'</w:tr>'; }
+      xml+=t+'</w:tbl><w:p><w:pPr><w:spacing w:after="40"/></w:pPr></w:p>'; break; }
+    case 'images':{ if(!b.images.length)break; xml+='<w:p><w:pPr><w:pageBreakBefore/><w:jc w:val="center"/><w:spacing w:after="200"/></w:pPr>'+run('\u9644\u4ef6\u5f71\u5370\u4ef6',{bold:true,size:26})+'</w:p>'; b.images.forEach(im=>{ xml+='<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="160"/></w:pPr>'+oDrawing(im,9360*635,7200*635)+'</w:p>'; }); break; }
+  } });
+  return xml;
+}
+function oBuildDocXml(){ return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  +'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+  +'<w:body>'+oBuildBody()+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1280" w:bottom="1440" w:left="1280" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>'; }
+function oContentTypes(imgs){ const ex=new Set(imgs.map(i=>i.ext)); let d=''; if(ex.has('png'))d+='<Default Extension="png" ContentType="image/png"/>'; if(ex.has('jpeg'))d+='<Default Extension="jpeg" ContentType="image/jpeg"/>';
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'+d+'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'; }
+function oDocRels(imgs){ const r=imgs.map(im=>'<Relationship Id="'+im._rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/'+im._media+'"/>').join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+r+'</Relationships>'; }
+function oCheckValidations(){ for(const b of oDoc){ if(b.type!=='table')continue; for(const r of b.rows){ const k=r.validate||'none'; if(k==='none'||(r.v||'')==='')continue; const res=O_VALIDATORS[k].fn(r.v); if(!res.ok)return{ok:false,msg:(r.k||'字段')+':'+(res.msg||'校验不通过')}; } } return {ok:true}; }
+function downloadOther(){
+  if(oDoc.length===0){ toast('请先添加内容'); return; }
+  const v=oCheckValidations(); if(!v.ok){ toast(v.msg); return; }
+  try{ const imgs=oCollectImages();
+    const files=[ {name:'[Content_Types].xml',data:enc(oContentTypes(imgs))},{name:'_rels/.rels',data:enc(RELS)},{name:'word/_rels/document.xml.rels',data:enc(oDocRels(imgs))},{name:'word/document.xml',data:enc(oBuildDocXml())} ];
+    imgs.forEach(im=>files.push({name:'word/media/'+im._media,data:im.bytes}));
+    const zip=makeZip(files); const blob=new Blob([zip],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='文档.docx'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('已生成并下载');
+  }catch(e){ toast('生成失败:'+e.message); }
+}
+
+applyI18n();
+sync();
+</script>
+</body>
+</html>
