@@ -1,0 +1,2827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>统一账号服务</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#F4F4F0;
+  --sf:#FFFFFF;
+  --sf2:#ECFFAF;
+  --sf3:#F6FFDA;
+  --sf4:#F9FFF0;
+  --bd:#E0E0D8;
+  --bd2:#CACAC0;
+  --ac:#5A8A00;
+  --ac2:#7AAA00;
+  --ac3:#ECFFAF;
+  --tx:#111110;
+  --txm:#555548;
+  --txd:#AAAAAA;
+  --ok:#3D8C3D;
+  --err:#CC2222;
+  --warn:#B85A00;
+  --nav-w:220px;
+  --hdr-h:52px;
+}
+
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;}
+
+/* ══════════ LAYOUT ══════════ */
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ── Sidebar ── */
+.nav{width:var(--nav-w);flex-shrink:0;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow-y:auto;}
+
+.nav-brand{padding:18px 20px 14px;border-bottom:1px solid var(--bd);}
+.nav-brand h2{font-size:15px;font-weight:700;color:var(--tx);line-height:1.2;}
+.nav-brand span{font-size:11px;color:var(--txd);letter-spacing:.3px;}
+
+.nav-section{padding:16px 12px 4px;font-size:10px;font-weight:700;color:var(--txd);letter-spacing:.8px;text-transform:uppercase;}
+
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;border-radius:3px;cursor:pointer;font-size:13px;font-weight:500;color:var(--txm);transition:all .15s;border:none;background:none;width:calc(100% - 16px);text-align:left;font-family:inherit;}
+.nav-item:hover{background:var(--sf2);color:var(--tx);}
+.nav-item.active{background:var(--sf2);color:var(--tx);font-weight:600;border-left:3px solid var(--ac);margin-left:5px;padding-left:11px;}
+.nav-item .ni{width:18px;height:18px;flex-shrink:0;opacity:.7;}
+.nav-item.active .ni{opacity:1;}
+
+.nav-bottom{margin-top:auto;padding:12px;border-top:1px solid var(--bd);}
+.user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:3px;cursor:pointer;transition:background .15s;}
+.user-pill:hover{background:var(--sf2);}
+.avatar{width:32px;height:32px;border-radius:2px;background:var(--ac2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;}
+.user-pill .uname{font-size:13px;font-weight:600;color:var(--tx);}
+.user-pill .urole{font-size:10px;color:var(--txd);}
+
+/* Mode switch */
+.mode-switch{margin:10px 12px 0;display:flex;border:1px solid var(--bd);border-radius:3px;overflow:hidden;}
+.mode-btn{flex:1;padding:6px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;background:none;border:none;color:var(--txm);font-family:inherit;transition:all .15s;}
+.mode-btn.active{background:var(--ac2);color:#fff;}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+.topbar{height:var(--hdr-h);border-bottom:1px solid var(--bd);background:var(--sf);display:flex;align-items:center;padding:0 24px;gap:12px;flex-shrink:0;}
+.topbar h1{font-size:16px;font-weight:700;flex:1;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:2px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--bd);background:var(--sf);color:var(--txm);font-family:inherit;transition:all .15s;white-space:nowrap;}
+.btn:hover{background:var(--sf2);border-color:var(--ac);}
+.btn.primary{background:var(--ac);border-color:var(--ac);color:#fff;}
+.btn.primary:hover{background:var(--ac2);border-color:var(--ac2);}
+
+.content{flex:1;overflow-y:auto;padding:24px;}
+
+/* Page visibility */
+.page{display:none;}
+.page.active{display:block;}
+
+/* ══════════ COMPONENTS ══════════ */
+
+/* Stat cards */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--sf);border:1px solid var(--bd);border-radius:3px;padding:16px 18px;}
+.stat-card .label{font-size:11px;color:var(--txm);margin-bottom:6px;font-weight:500;}
+.stat-card .val{font-size:28px;font-weight:700;color:var(--tx);line-height:1;}
+.stat-card .sub{font-size:11px;color:var(--txd);margin-top:5px;}
+.stat-card.accent{background:var(--sf2);}
+
+/* Section cards */
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:3px;margin-bottom:16px;}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;}
+.card-header h3{font-size:14px;font-weight:700;flex:1;}
+.card-body{padding:18px;}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--txd);letter-spacing:.5px;text-transform:uppercase;border-bottom:2px solid var(--bd);}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--bd);font-size:13px;color:var(--tx);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--sf4);}
+.tbl .em{font-weight:600;}
+
+/* Badge */
+.badge{display:inline-block;padding:2px 8px;border-radius:2px;font-size:11px;font-weight:600;}
+.badge.ok{background:#DFFFDF;color:var(--ok);}
+.badge.warn{background:#FFF3E0;color:var(--warn);}
+.badge.err{background:#FFE8E8;color:var(--err);}
+.badge.grey{background:var(--bg);color:var(--txm);}
+.badge.ac{background:var(--sf2);color:var(--ac);}
+
+/* Checkin */
+.checkin-box{display:flex;align-items:center;gap:20px;padding:20px;background:var(--sf2);border:1px solid var(--ac3);border-radius:3px;margin-bottom:20px;}
+.checkin-box .ck-info{flex:1;}
+.checkin-box .ck-title{font-size:15px;font-weight:700;color:var(--tx);margin-bottom:4px;}
+.checkin-box .ck-sub{font-size:12px;color:var(--txm);}
+.ck-streak{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.ck-day{width:22px;height:22px;border-radius:2px;background:var(--sf);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--txd);}
+.ck-day.done{background:var(--ac2);border-color:var(--ac2);color:#fff;}
+.ck-day.today{border-color:var(--ac);color:var(--ac);}
+
+/* Points */
+.pts-row{display:flex;gap:12px;margin-bottom:20px;}
+.pts-card{flex:1;background:var(--sf);border:1px solid var(--bd);border-radius:3px;padding:14px 16px;}
+.pts-card .pv{font-size:22px;font-weight:700;color:var(--tx);}
+.pts-card .pl{font-size:11px;color:var(--txm);margin-top:2px;}
+
+/* App grid */
+.app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.app-card{background:var(--sf);border:1px solid var(--bd);border-radius:3px;padding:16px;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;gap:10px;}
+.app-card:hover{border-color:var(--ac);background:var(--sf4);}
+.app-card .app-icon{width:40px;height:40px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.app-card .app-name{font-size:13px;font-weight:700;color:var(--tx);}
+.app-card .app-desc{font-size:11px;color:var(--txm);line-height:1.5;}
+
+/* Settings form */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-row{display:flex;flex-direction:column;gap:4px;}
+.form-row.full{grid-column:1/-1;}
+.form-row label{font-size:10px;font-weight:700;color:var(--txd);letter-spacing:.6px;text-transform:uppercase;}
+.form-row input,.form-row select{height:34px;padding:0 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:2px;color:var(--tx);font-size:13px;outline:none;font-family:inherit;transition:border-color .15s;}
+.form-row input:focus,.form-row select:focus{border-color:var(--ac);}
+.form-row input::placeholder{color:var(--txd);}
+
+/* Bind methods */
+.bind-list{display:flex;flex-direction:column;gap:8px;}
+.bind-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--bd);border-radius:2px;background:var(--sf);}
+.bind-row .bind-icon{width:28px;height:28px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.bind-row .bind-name{flex:1;font-size:13px;font-weight:600;}
+.bind-row .bind-val{font-size:12px;color:var(--txm);}
+
+/* Log table */
+.log-row td:first-child{font-family:monospace;font-size:11px;color:var(--txd);}
+
+/* Chart bar */
+.chart-bars{display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:8px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bar{width:100%;background:var(--ac3);border-radius:2px 2px 0 0;transition:height .3s;}
+.bar-label{font-size:9px;color:var(--txd);}
+
+/* User detail panel */
+.detail-grid{display:grid;grid-template-columns:200px 1fr;gap:0;border:1px solid var(--bd);border-radius:3px;overflow:hidden;}
+.detail-list{border-right:1px solid var(--bd);overflow-y:auto;max-height:420px;}
+.detail-list-item{padding:10px 14px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .15s;}
+.detail-list-item:hover{background:var(--sf4);}
+.detail-list-item.active{background:var(--sf2);}
+.detail-list-item .din{font-size:13px;font-weight:600;}
+.detail-list-item .did{font-size:11px;color:var(--txd);}
+.detail-panel{padding:18px;overflow-y:auto;}
+.detail-section{margin-bottom:16px;}
+.detail-section h4{font-size:11px;font-weight:700;color:var(--txd);letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--bd);}
+.kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.kv{display:flex;flex-direction:column;gap:2px;}
+.kv .k{font-size:10px;color:var(--txd);}
+.kv .v{font-size:13px;font-weight:500;}
+
+/* Real-name */
+.rn-box{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--bd);border-radius:2px;background:var(--sf4);}
+.rn-box .rn-info{flex:1;font-size:12px;color:var(--txm);}
+.rn-box .rn-name{font-size:13px;font-weight:700;color:var(--tx);}
+
+/* Tabs */
+.tabs{display:flex;border-bottom:2px solid var(--bd);margin-bottom:16px;}
+.tab{padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--txm);transition:all .15s;}
+.tab.active{color:var(--tx);border-bottom-color:var(--ac);}
+
+/* Notification dot */
+.dot-new{width:6px;height:6px;border-radius:50%;background:var(--err);flex-shrink:0;}
+
+/* Empty state */
+.empty{text-align:center;padding:40px 20px;color:var(--txd);}
+.empty .ei{font-size:32px;margin-bottom:8px;}
+.empty p{font-size:13px;}
+
+/* Search bar */
+.search-bar{display:flex;align-items:center;gap:8px;margin-bottom:16px;}
+.search-bar input{flex:1;height:34px;padding:0 12px;border:1px solid var(--bd);border-radius:2px;background:var(--sf);color:var(--tx);font-size:13px;outline:none;font-family:inherit;}
+.search-bar input:focus{border-color:var(--ac);}
+.search-bar input::placeholder{color:var(--txd);}
+
+/* Checkin modal */
+.modal-mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:100;align-items:center;justify-content:center;}
+.modal-mask.show{display:flex;}
+.modal{background:var(--sf);border:1px solid var(--bd);border-radius:3px;padding:28px;min-width:320px;max-width:90vw;text-align:center;}
+.modal h3{font-size:18px;font-weight:700;margin-bottom:8px;}
+.modal p{font-size:13px;color:var(--txm);margin-bottom:20px;}
+.modal .pts-big{font-size:40px;font-weight:800;color:var(--ac);}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--tx);color:var(--sf);padding:10px 18px;border-radius:3px;font-size:13px;font-weight:600;z-index:200;display:none;animation:fadeUp .3s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══════════ 环境变量 ══════════ */
+.env-topbar{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;padding:14px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:2px;margin-bottom:14px;}
+
+.env-group-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.env-gtab{padding:6px 14px;border:1px solid var(--bd);border-radius:2px;background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;color:var(--txm);transition:all .15s;font-family:inherit;display:flex;align-items:center;gap:6px;}
+.env-gtab:hover{border-color:var(--ac);color:var(--tx);}
+.env-gtab.active{background:var(--sf2);border-color:var(--ac);color:var(--tx);}
+.env-gtab-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+
+.env-section{background:var(--sf);border:1px solid var(--bd);border-radius:2px;margin-bottom:14px;overflow:hidden;}
+.env-section-header{padding:11px 16px;background:var(--bg);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none;}
+.env-section-header:hover{background:var(--sf2);}
+.env-section-icon{font-size:15px;}
+.env-section-name{font-size:13px;font-weight:700;flex:1;}
+.env-section-meta{font-size:11px;color:var(--txm);}
+.env-section-chevron{font-size:11px;color:var(--txd);transition:transform .2s;}
+.env-section.collapsed .env-section-chevron{transform:rotate(-90deg);}
+.env-section.collapsed .env-rows{display:none;}
+
+.env-rows{display:flex;flex-direction:column;}
+.env-row{display:grid;grid-template-columns:260px 1fr 110px 36px;align-items:center;gap:0;border-bottom:1px solid var(--bd);transition:background .15s;}
+.env-row:last-child{border-bottom:none;}
+.env-row:hover{background:var(--sf4);}
+
+.env-key-cell{padding:10px 14px;border-right:1px solid var(--bd);}
+.env-key{font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;font-weight:600;color:var(--tx);word-break:break-all;}
+.env-key-req{color:var(--err);margin-left:2px;}
+.env-key-desc{font-size:11px;color:var(--txm);margin-top:2px;line-height:1.4;}
+
+.env-val-cell{padding:8px 12px;border-right:1px solid var(--bd);}
+.env-input{width:100%;height:30px;padding:0 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:2px;color:var(--tx);font-size:12px;font-family:'SFMono-Regular',Consolas,monospace;outline:none;transition:border-color .15s;}
+.env-input:focus{border-color:var(--ac);}
+.env-input::placeholder{color:var(--txd);font-family:inherit;}
+.env-input.secret{letter-spacing:2px;color:var(--txm);}
+.env-input.filled{border-color:var(--ok);background:#FAFFFA;}
+.env-input.empty-required{border-color:var(--err);background:#FFF8F8;}
+
+.env-status-cell{padding:8px 12px;border-right:1px solid var(--bd);text-align:center;}
+.env-action-cell{padding:8px;display:flex;justify-content:center;}
+.env-eye-btn{width:28px;height:28px;border:none;background:none;cursor:pointer;color:var(--txd);font-size:14px;border-radius:2px;transition:all .15s;display:flex;align-items:center;justify-content:center;}
+.env-eye-btn:hover{background:var(--sf2);color:var(--tx);}
+
+/* ══════════ API 调用 ══════════ */
+.api-topbar{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;padding:14px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:2px;margin-bottom:12px;}
+.api-base-url{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--sf2);border:1px solid var(--bd);border-radius:2px;margin-bottom:14px;}
+.api-base-url code{flex:1;font-family:monospace;font-size:13px;font-weight:700;color:var(--ac);letter-spacing:.3px;}
+
+/* API 文档条目 */
+.api-doc-item{background:var(--sf);border:1px solid var(--bd);border-radius:2px;margin-bottom:8px;overflow:hidden;}
+.api-doc-header{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;transition:background .15s;}
+.api-doc-header:hover{background:var(--sf4);}
+.api-doc-item.open .api-doc-header{border-bottom:1px solid var(--bd);}
+.api-doc-body{display:none;padding:14px 16px;background:var(--sf4);}
+.api-doc-item.open .api-doc-body{display:block;}
+.method-badge{padding:3px 8px;border-radius:2px;font-size:11px;font-weight:700;font-family:monospace;}
+.method-get{background:#E6F9EE;color:#1A6B3A;}
+.method-post{background:#E8F0FF;color:#1A3A8F;}
+.method-delete{background:#FFE8E8;color:#8F1A1A;}
+.api-path{font-family:monospace;font-size:13px;font-weight:600;flex:1;}
+.api-summary{font-size:12px;color:var(--txm);}
+.param-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;}
+.param-table th{padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--txd);letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--bd);}
+.param-table td{padding:7px 10px;border-bottom:1px solid var(--bd);vertical-align:top;}
+.param-table tr:last-child td{border-bottom:none;}
+.param-name{font-family:monospace;font-weight:600;color:var(--tx);}
+.param-req{color:var(--err);font-size:10px;margin-left:3px;}
+.response-box{background:var(--sf);border:1px solid var(--bd);border-radius:2px;padding:10px 12px;margin-top:10px;}
+.response-box pre{font-size:11px;font-family:monospace;color:var(--ac);white-space:pre-wrap;word-break:break-all;}
+
+/* ══════════ 应用管理编辑弹窗 ══════════ */
+.app-edit-modal{min-width:480px;text-align:left;padding:0;overflow:hidden;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+
+/* ══════════ 等级管理 ══════════ */
+.lvl-group-tabs{display:flex;gap:10px;margin-bottom:14px;}
+.lvl-gtab{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 16px;border:1px solid var(--bd);border-radius:2px;background:var(--sf);cursor:pointer;transition:all .15s;font-family:inherit;min-width:140px;}
+.lvl-gtab:hover{border-color:var(--ac);background:var(--sf4);}
+.lvl-gtab.active{border-color:var(--ac);background:var(--sf2);border-left:3px solid var(--ac);}
+.lvl-gtab-icon{font-size:18px;margin-bottom:2px;}
+.lvl-gtab span:nth-child(2){font-size:13px;font-weight:700;color:var(--tx);}
+.lvl-gtab-count{font-size:10px;color:var(--txm);}
+
+.lvl-desc-bar{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:2px;margin-bottom:16px;}
+
+/* 等级卡片 */
+.lvl-cards{display:flex;flex-direction:column;gap:0;border:1px solid var(--bd);border-radius:2px;overflow:hidden;}
+.lvl-card{background:var(--sf);border-bottom:1px solid var(--bd);display:grid;grid-template-columns:48px 1fr auto;align-items:start;gap:0;transition:background .15s;}
+.lvl-card:last-child{border-bottom:none;}
+.lvl-card:hover{background:var(--sf4);}
+
+.lvl-rank{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px 0;background:var(--sf2);border-right:1px solid var(--bd);height:100%;}
+.lvl-rank-num{font-size:20px;font-weight:800;color:var(--ac);line-height:1;}
+.lvl-rank-txt{font-size:9px;color:var(--txm);margin-top:2px;letter-spacing:.3px;}
+
+.lvl-body{padding:14px 16px;}
+.lvl-name-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.lvl-name{font-size:14px;font-weight:700;color:var(--tx);}
+.lvl-desc{font-size:12px;color:var(--txm);margin-bottom:10px;line-height:1.5;}
+
+.lvl-perms{display:flex;flex-wrap:wrap;gap:5px;}
+.lvl-perm-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:2px;font-size:11px;font-weight:500;}
+.lvl-perm-tag.on{background:var(--sf2);color:var(--ac);border:1px solid var(--ac3);}
+.lvl-perm-tag.off{background:var(--bg);color:var(--txd);border:1px solid var(--bd);text-decoration:line-through;}
+
+.lvl-actions{display:flex;flex-direction:column;gap:6px;padding:14px 12px;align-items:flex-end;justify-content:flex-start;}
+
+/* 权限编辑行 */
+.perm-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--bd);gap:12px;}
+.perm-row:last-child{border-bottom:none;}
+.perm-row:hover{background:var(--sf4);}
+.perm-row-info{flex:1;}
+.perm-row-name{font-size:13px;font-weight:600;color:var(--tx);}
+.perm-row-desc{font-size:11px;color:var(--txm);margin-top:1px;}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--bd2);border-radius:10px;cursor:pointer;transition:all .2s;}
+.toggle-slider::before{content:'';position:absolute;height:14px;width:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:all .2s;}
+.toggle input:checked+.toggle-slider{background:var(--ac);}
+.toggle input:checked+.toggle-slider::before{transform:translateX(16px);}
+</style>
+<script>
+  // 未登录跳回登录页
+  (function(){
+    const token = localStorage.getItem('sso_token');
+    if (!token && !window.location.pathname.includes('login')) {
+      window.location.href = '/login.html';
+    }
+  })();
+</script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ══ SIDEBAR ══ -->
+  <nav class="nav" id="sidebar">
+
+    <div class="nav-brand">
+      <h2 id="brand-title">统一账号服务</h2>
+      <span id="brand-sub">Universal SSO Platform</span>
+    </div>
+
+    <!-- 模式切换 -->
+    <div class="mode-switch">
+      <button class="mode-btn active" id="mode-user" onclick="setMode('user')">用户端</button>
+      <button class="mode-btn" id="mode-admin" onclick="setMode('admin')">管理端</button>
+    </div>
+
+    <!-- 用户端菜单 -->
+    <div id="nav-user">
+      <div class="nav-section">用户服务</div>
+      <button class="nav-item active" onclick="goto('home')" id="ni-home">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M7 18v-6h6v6"/></svg>
+        首页
+      </button>
+      <button class="nav-item" onclick="goto('apps')" id="ni-apps">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="11" y="2" width="7" height="7" rx="1"/><rect x="2" y="11" width="7" height="7" rx="1"/><rect x="11" y="11" width="7" height="7" rx="1"/></svg>
+        应用管理
+      </button>
+      <button class="nav-item" onclick="goto('account')" id="ni-account">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="7" r="4"/><path d="M3 18c0-4 3-6 7-6s7 2 7 6"/></svg>
+        账号设定
+      </button>
+    </div>
+
+    <!-- 管理端菜单 -->
+    <div id="nav-admin" style="display:none">
+      <div class="nav-section">管理服务</div>
+      <button class="nav-item active" onclick="goto('adm-users')" id="ni-adm-users">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="7" r="3"/><path d="M2 17c0-3 2.5-5 6-5s6 2 6 5"/><path d="M14 7c1.5 0 3 1 3 3s-1.5 3-3 3"/><path d="M17 17c0-2-1-3.5-3-4"/></svg>
+        用户管理
+      </button>
+      <button class="nav-item" onclick="goto('adm-apps')" id="ni-adm-apps">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h4v4H4zM12 4h4v4h-4zM4 12h4v4H4zM12 12h4v4h-4z"/></svg>
+        应用管理
+      </button>
+      <button class="nav-item" onclick="goto('adm-logs')" id="ni-adm-logs">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h12M4 10h12M4 14h8"/></svg>
+        登录日志
+      </button>
+      <button class="nav-item" onclick="goto('adm-levels')" id="ni-adm-levels">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16h4v-6H2zM8 16h4V8H8zM14 16h4V4h-4z"/></svg>
+        等级管理
+      </button>
+      <button class="nav-item" onclick="goto('adm-env')" id="ni-adm-env">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M6 7l3 3-3 3M11 13h3"/></svg>
+        环境变量
+      </button>
+      <button class="nav-item" onclick="goto('adm-api')" id="ni-adm-api">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="3"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.05 5.05l1.42 1.42M13.54 13.54l1.42 1.42M5.05 14.95l1.42-1.42M13.54 6.46l1.42-1.42"/></svg>
+        API 调用
+      </button>
+    </div>
+
+    <div class="nav-bottom">
+      <div class="user-pill">
+        <div class="avatar" id="nav-avatar">张</div>
+        <div>
+          <div class="uname" id="nav-uname">张三丰</div>
+          <div class="urole" id="nav-urole">普通用户 · UID #00142</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="page-title">首页</h1>
+      <div id="topbar-actions"></div>
+    </div>
+
+    <div class="content">
+
+      <!-- ▸ 用户首页 -->
+      <div class="page active" id="page-home">
+
+        <!-- 签到区 -->
+        <div class="checkin-box">
+          <div class="ck-info">
+            <div class="ck-title">今日签到</div>
+            <div class="ck-sub">连续签到第 <strong>5</strong> 天，坚持下去获得额外奖励！</div>
+            <div class="ck-streak" style="margin-top:10px">
+              <span style="font-size:11px;color:var(--txm);margin-right:4px;">本周</span>
+              <div class="ck-day done">一</div>
+              <div class="ck-day done">二</div>
+              <div class="ck-day done">三</div>
+              <div class="ck-day done">四</div>
+              <div class="ck-day today" id="ck-today">五</div>
+              <div class="ck-day">六</div>
+              <div class="ck-day">日</div>
+            </div>
+          </div>
+          <button class="btn primary" id="ck-btn" onclick="doCheckin()" style="padding:10px 22px;font-size:13px;">
+            ✓ 立即签到
+          </button>
+        </div>
+
+        <!-- 积分统计 -->
+        <div class="pts-row">
+          <div class="pts-card" style="background:var(--sf2);border-color:var(--ac3);">
+            <div class="pv">380</div>
+            <div class="pl">当前积分</div>
+          </div>
+          <div class="pts-card">
+            <div class="pv">1,240</div>
+            <div class="pl">累计获得</div>
+          </div>
+          <div class="pts-card">
+            <div class="pv">860</div>
+            <div class="pl">已使用</div>
+          </div>
+          <div class="pts-card">
+            <div class="pv">5</div>
+            <div class="pl">连续签到天数</div>
+          </div>
+        </div>
+
+        <!-- 近期登录 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>近期登录记录</h3>
+            <span style="font-size:11px;color:var(--txd);">最近 7 次</span>
+          </div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr>
+                <th>时间</th><th>登录方式</th><th>应用</th><th>IP 地址</th><th>设备</th><th>状态</th>
+              </tr></thead>
+              <tbody>
+                <tr><td class="em">2025-06-23 09:14</td><td>微信扫码</td><td>本系统</td><td>121.44.xx.xx</td><td>Chrome / macOS</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td class="em">2025-06-22 18:32</td><td>邮箱密码</td><td>企业OA</td><td>121.44.xx.xx</td><td>Safari / iOS</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td class="em">2025-06-21 10:05</td><td>短信验证码</td><td>本系统</td><td>112.80.xx.xx</td><td>Chrome / Win</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td class="em">2025-06-20 08:50</td><td>邮箱密码</td><td>本系统</td><td>192.168.1.x</td><td>Firefox / Linux</td><td><span class="badge err">失败</span></td></tr>
+                <tr><td class="em">2025-06-19 22:17</td><td>微信扫码</td><td>项目协作台</td><td>121.44.xx.xx</td><td>Chrome / macOS</td><td><span class="badge ok">成功</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 积分兑换 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>积分兑换</h3>
+            <span class="badge ac">当前积分 380</span>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+              <div style="border:1px solid var(--bd);border-radius:2px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'">
+                <div style="font-size:24px;margin-bottom:6px;">☁️</div>
+                <div style="font-size:12px;font-weight:700;margin-bottom:3px;">存储空间 +1G</div>
+                <div style="font-size:11px;color:var(--ac);font-weight:700;">100 积分</div>
+              </div>
+              <div style="border:1px solid var(--bd);border-radius:2px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'">
+                <div style="font-size:24px;margin-bottom:6px;">🎨</div>
+                <div style="font-size:12px;font-weight:700;margin-bottom:3px;">专属主题皮肤</div>
+                <div style="font-size:11px;color:var(--ac);font-weight:700;">200 积分</div>
+              </div>
+              <div style="border:1px solid var(--bd);border-radius:2px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;" onmouseenter="this.style.borderColor='var(--ac)'" onmouseleave="this.style.borderColor='var(--bd)'">
+                <div style="font-size:24px;margin-bottom:6px;">🔒</div>
+                <div style="font-size:12px;font-weight:700;margin-bottom:3px;">高级安全防护</div>
+                <div style="font-size:11px;color:var(--ac);font-weight:700;">300 积分</div>
+              </div>
+              <div style="border:1px dashed var(--bd2);border-radius:2px;padding:14px;text-align:center;color:var(--txd);">
+                <div style="font-size:24px;margin-bottom:6px;">＋</div>
+                <div style="font-size:12px;">更多兑换<br>即将上线</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ▸ 应用管理 -->
+      <div class="page" id="page-apps">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('tab-market','tab-authorized',this,document.querySelectorAll('.tab'))">应用市场</div>
+          <div class="tab" onclick="switchTab('tab-authorized','tab-market',this,document.querySelectorAll('.tab'))">已授权应用</div>
+        </div>
+
+        <!-- 应用市场 -->
+        <div id="tab-market">
+          <div class="search-bar">
+            <input type="text" id="market-search" placeholder="搜索应用…" oninput="renderMarket()"/>
+            <button class="btn" onclick="renderMarket()">全部分类 ▾</button>
+          </div>
+          <div class="app-grid" id="market-grid">
+            <!-- JS 渲染，数据来自共享 APP_LIST -->
+          </div>
+        </div>
+
+        <!-- 已授权应用 -->
+        <div id="tab-authorized" style="display:none">
+          <div class="card" style="margin-bottom:12px;">
+            <div class="card-header">
+              <h3>企业 OA 系统</h3>
+              <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:4px 10px;">撤销授权</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table class="tbl log-row">
+                <thead><tr><th>登录时间</th><th>方式</th><th>IP</th><th>设备</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr><td>2025-06-22 18:32</td><td>SSO 跳转</td><td>121.44.xx.xx</td><td>Safari / iOS</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr><td>2025-06-18 09:11</td><td>SSO 跳转</td><td>121.44.xx.xx</td><td>Chrome / macOS</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr><td>2025-06-10 15:44</td><td>SSO 跳转</td><td>112.80.xx.xx</td><td>Chrome / Win</td><td><span class="badge err">失败</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3>项目协作台</h3>
+              <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:4px 10px;">撤销授权</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table class="tbl log-row">
+                <thead><tr><th>登录时间</th><th>方式</th><th>IP</th><th>设备</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr><td>2025-06-19 22:17</td><td>SSO 跳转</td><td>121.44.xx.xx</td><td>Chrome / macOS</td><td><span class="badge ok">成功</span></td></tr>
+                  <tr><td>2025-06-12 11:02</td><td>SSO 跳转</td><td>121.44.xx.xx</td><td>Firefox / Win</td><td><span class="badge ok">成功</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ▸ 账号设定 -->
+      <div class="page" id="page-account">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTabEl('as-profile','as-bind',this)">个人信息</div>
+          <div class="tab" onclick="switchTabEl('as-bind','as-profile',this)">登录方式绑定</div>
+        </div>
+
+        <!-- 个人信息 -->
+        <div id="as-profile">
+          <div class="card">
+            <div class="card-header"><h3>基本信息</h3></div>
+            <div class="card-body">
+              <div class="settings-grid">
+                <div class="form-row"><label>昵称</label><input type="text" value="张三丰"/></div>
+                <div class="form-row"><label>用户编号</label><input type="text" value="UID-00142" readonly style="background:var(--bg);color:var(--txd)"/></div>
+                <div class="form-row"><label>邮箱地址</label><input type="email" value="zhangsan@example.com"/></div>
+                <div class="form-row"><label>手机号码</label><input type="tel" value="138****8888"/></div>
+                <div class="form-row full"><label>个人简介</label><input type="text" placeholder="介绍一下自己…"/></div>
+              </div>
+              <div style="margin-top:14px;display:flex;gap:8px;">
+                <button class="btn primary" onclick="showToast('✓ 信息保存成功')">保存修改</button>
+                <button class="btn">重置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="kyc-card">
+            <div class="card-header">
+              <h3>实名认证</h3>
+              <span class="badge ok" id="kyc-badge">已认证</span>
+            </div>
+            <div class="card-body" id="kyc-body">
+              <!-- JS 渲染 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 登录方式绑定 -->
+        <div id="as-bind" style="display:none">
+          <div class="card">
+            <div class="card-header"><h3>已绑定的登录方式</h3></div>
+            <div class="card-body">
+              <div class="bind-list">
+                <div class="bind-row">
+                  <div class="bind-icon" style="background:#E6F9EE;">📧</div>
+                  <div class="bind-name">邮箱账号</div>
+                  <div class="bind-val">zhang***@example.com</div>
+                  <span class="badge ok">已绑定</span>
+                  <button class="btn" style="font-size:11px;padding:4px 10px;">修改</button>
+                </div>
+                <div class="bind-row">
+                  <div class="bind-icon" style="background:#E6F9EE;">📱</div>
+                  <div class="bind-name">手机号码</div>
+                  <div class="bind-val">138****8888</div>
+                  <span class="badge ok">已绑定</span>
+                  <button class="btn" style="font-size:11px;padding:4px 10px;">修改</button>
+                </div>
+                <div class="bind-row">
+                  <div class="bind-icon" style="background:#E6F9EE;">💬</div>
+                  <div class="bind-name">微信账号</div>
+                  <div class="bind-val">张三丰_wx</div>
+                  <span class="badge ok">已绑定</span>
+                  <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:4px 10px;">解绑</button>
+                </div>
+                <div class="bind-row" style="background:var(--sf4);">
+                  <div class="bind-icon" style="background:#E8F0FF;">🏢</div>
+                  <div class="bind-name">企业微信</div>
+                  <div class="bind-val" style="color:var(--txd);">未绑定</div>
+                  <span class="badge grey">未绑定</span>
+                  <button class="btn primary" style="font-size:11px;padding:4px 10px;" onclick="showBindModal('企业微信','wecom')">绑定</button>
+                </div>
+                <div class="bind-row" style="background:var(--sf4);">
+                  <div class="bind-icon" style="background:#E6FFF5;">📗</div>
+                  <div class="bind-name">飞书账号</div>
+                  <div class="bind-val" style="color:var(--txd);">未绑定</div>
+                  <span class="badge grey">未绑定</span>
+                  <button class="btn primary" style="font-size:11px;padding:4px 10px;" onclick="showBindModal('飞书','feishu')">绑定</button>
+                </div>
+                <div class="bind-row" style="background:var(--sf4);">
+                  <div class="bind-icon" style="background:#E8F0FF;">📌</div>
+                  <div class="bind-name">钉钉账号</div>
+                  <div class="bind-val" style="color:var(--txd);">未绑定</div>
+                  <span class="badge grey">未绑定</span>
+                  <button class="btn primary" style="font-size:11px;padding:4px 10px;" onclick="showBindModal('钉钉','dingtalk')">绑定</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ▸ 管理端：用户管理 -->
+      <div class="page" id="page-adm-users">
+
+        <!-- 报表 -->
+        <div class="stat-grid">
+          <div class="stat-card accent">
+            <div class="label">注册用户总数</div>
+            <div class="val">1,482</div>
+            <div class="sub">较上月 +43</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">本月新增</div>
+            <div class="val">43</div>
+            <div class="sub">注册转化率 68%</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">今日活跃</div>
+            <div class="val">218</div>
+            <div class="sub">DAU / MAU = 14.7%</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">已实名认证</div>
+            <div class="val">896</div>
+            <div class="sub">占总用户 60.5%</div>
+          </div>
+        </div>
+
+        <!-- 每日新增趋势 -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><h3>近 7 日新增用户</h3></div>
+          <div class="card-body">
+            <div class="chart-bars">
+              <div class="bar-col"><div class="bar" style="height:45px;"></div><div class="bar-label">17日</div></div>
+              <div class="bar-col"><div class="bar" style="height:60px;"></div><div class="bar-label">18日</div></div>
+              <div class="bar-col"><div class="bar" style="height:30px;"></div><div class="bar-label">19日</div></div>
+              <div class="bar-col"><div class="bar" style="height:70px;background:var(--ac2);"></div><div class="bar-label">20日</div></div>
+              <div class="bar-col"><div class="bar" style="height:55px;"></div><div class="bar-label">21日</div></div>
+              <div class="bar-col"><div class="bar" style="height:48px;"></div><div class="bar-label">22日</div></div>
+              <div class="bar-col"><div class="bar" style="height:38px;"></div><div class="bar-label">23日</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 用户账号详情 -->
+        <div class="card">
+          <div class="card-header">
+            <h3>账号详情</h3>
+            <button class="btn primary" style="font-size:11px;padding:5px 12px;">+ 新建用户</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div class="detail-grid">
+              <!-- 列表 -->
+              <div class="detail-list">
+                <div class="detail-list-item active" onclick="selectUser(this,0)">
+                  <div class="din">张三丰</div>
+                  <div class="did">UID #00142 · 在职</div>
+                </div>
+                <div class="detail-list-item" onclick="selectUser(this,1)">
+                  <div class="din">李娜</div>
+                  <div class="did">UID #00098 · 在职</div>
+                </div>
+                <div class="detail-list-item" onclick="selectUser(this,2)">
+                  <div class="din">王芳</div>
+                  <div class="did">UID #00201 · 已停用</div>
+                </div>
+                <div class="detail-list-item" onclick="selectUser(this,3)">
+                  <div class="din">陈浩</div>
+                  <div class="did">UID #00055 · 在职</div>
+                </div>
+                <div class="detail-list-item" onclick="selectUser(this,4)">
+                  <div class="din">周晓红</div>
+                  <div class="did">UID #00317 · 在职</div>
+                </div>
+              </div>
+              <!-- 详情面板 -->
+              <div class="detail-panel" id="user-detail-panel">
+                <!-- 由 JS 渲染 -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ▸ 管理端：应用管理 -->
+      <div class="page" id="page-adm-apps">
+        <div class="search-bar">
+          <input type="text" placeholder="搜索已接入应用…"/>
+          <button class="btn primary">+ 新增应用</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>应用名称</th><th>Client ID</th><th>回调地址</th><th>授权用户数</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="em">企业 OA 系统</td>
+                  <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:2px;">app_oa_001</code></td>
+                  <td style="font-size:12px;color:var(--txm);">https://oa.example.com/cb</td>
+                  <td>342</td>
+                  <td><span class="badge ok">启用</span></td>
+                  <td><button class="btn" style="font-size:11px;padding:3px 8px;">编辑</button></td>
+                </tr>
+                <tr>
+                  <td class="em">数据分析台</td>
+                  <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:2px;">app_bi_002</code></td>
+                  <td style="font-size:12px;color:var(--txm);">https://bi.example.com/auth/cb</td>
+                  <td>218</td>
+                  <td><span class="badge ok">启用</span></td>
+                  <td><button class="btn" style="font-size:11px;padding:3px 8px;">编辑</button></td>
+                </tr>
+                <tr>
+                  <td class="em">项目协作台</td>
+                  <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:2px;">app_collab_003</code></td>
+                  <td style="font-size:12px;color:var(--txm);">https://collab.example.com/sso</td>
+                  <td>156</td>
+                  <td><span class="badge ok">启用</span></td>
+                  <td><button class="btn" style="font-size:11px;padding:3px 8px;">编辑</button></td>
+                </tr>
+                <tr>
+                  <td class="em">档案管理系统</td>
+                  <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:2px;">app_arc_004</code></td>
+                  <td style="font-size:12px;color:var(--txm);">https://arc.example.com/callback</td>
+                  <td>0</td>
+                  <td><span class="badge warn">待审核</span></td>
+                  <td><button class="btn primary" style="font-size:11px;padding:3px 8px;">审核</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ▸ 管理端：登录日志 -->
+      <div class="page" id="page-adm-logs">
+        <div class="search-bar">
+          <input type="text" placeholder="搜索用户名、IP、应用…"/>
+          <button class="btn">全部状态 ▾</button>
+          <button class="btn">导出 CSV</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table class="tbl log-row">
+              <thead><tr><th>时间</th><th>用户</th><th>UID</th><th>登录方式</th><th>应用</th><th>IP 地址</th><th>设备</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td>2025-06-23 09:14</td><td class="em">张三丰</td><td>#00142</td><td>微信扫码</td><td>本系统</td><td>121.44.xx.xx</td><td>Chrome / macOS</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td>2025-06-23 08:55</td><td class="em">李娜</td><td>#00098</td><td>邮箱密码</td><td>企业OA</td><td>58.132.xx.xx</td><td>Chrome / Win</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td>2025-06-23 08:42</td><td class="em">—</td><td>—</td><td>邮箱密码</td><td>本系统</td><td>103.24.xx.xx</td><td>Python Requests</td><td><span class="badge err">失败</span></td></tr>
+                <tr><td>2025-06-23 08:31</td><td class="em">陈浩</td><td>#00055</td><td>钉钉扫码</td><td>项目协作台</td><td>180.97.xx.xx</td><td>Safari / iOS</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td>2025-06-22 23:47</td><td class="em">周晓红</td><td>#00317</td><td>短信验证码</td><td>本系统</td><td>123.58.xx.xx</td><td>Chrome / Android</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td>2025-06-22 22:33</td><td class="em">—</td><td>—</td><td>邮箱密码</td><td>本系统</td><td>45.151.xx.xx</td><td>curl/7.88</td><td><span class="badge err">失败</span></td></tr>
+                <tr><td>2025-06-22 18:32</td><td class="em">张三丰</td><td>#00142</td><td>邮箱密码</td><td>企业OA</td><td>121.44.xx.xx</td><td>Safari / iOS</td><td><span class="badge ok">成功</span></td></tr>
+                <tr><td>2025-06-22 17:10</td><td class="em">王芳</td><td>#00201</td><td>微信扫码</td><td>本系统</td><td>60.28.xx.xx</td><td>Chrome / macOS</td><td><span class="badge err">账号停用</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ▸ 管理端：等级管理 -->
+      <div class="page" id="page-adm-levels">
+
+        <!-- 用户组切换 -->
+        <div class="lvl-group-tabs" id="lvl-group-tabs">
+          <button class="lvl-gtab active" onclick="switchLvlGroup('user')">
+            <span class="lvl-gtab-icon">👤</span>
+            <span>普通用户</span>
+            <span class="lvl-gtab-count">5 个等级</span>
+          </button>
+          <button class="lvl-gtab" onclick="switchLvlGroup('admin')">
+            <span class="lvl-gtab-icon">🛡️</span>
+            <span>管理员</span>
+            <span class="lvl-gtab-count">3 个等级</span>
+          </button>
+        </div>
+
+        <!-- 说明栏 -->
+        <div class="lvl-desc-bar" id="lvl-desc-bar">
+          <div>
+            <div style="font-size:13px;font-weight:700;" id="lvl-group-label">普通用户组</div>
+            <div style="font-size:12px;color:var(--txm);margin-top:2px;" id="lvl-group-sub">共 5 个等级，数字越小代表等级越高。各等级可使用的服务范围不同，高等级包含低等级的全部权限。</div>
+          </div>
+          <button class="btn primary" style="font-size:12px;" onclick="openLvlEditModal()">+ 编辑权限模板</button>
+        </div>
+
+        <!-- 等级卡片列表 -->
+        <div class="lvl-cards" id="lvl-cards">
+          <!-- 由 JS 渲染 -->
+        </div>
+
+      </div>
+
+      <!-- ▸ 管理端：API 调用 -->
+      <div class="page" id="page-adm-api">
+
+        <div class="api-topbar">
+          <div>
+            <div style="font-size:13px;font-weight:700;">API 调用管理</div>
+            <div style="font-size:12px;color:var(--txm);margin-top:3px;">管理用于对接第三方系统的 API 密钥与调用配置，所有请求需携带 Bearer Token。</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button class="btn" onclick="goto('adm-logs')">查看调用日志</button>
+            <button class="btn primary" onclick="openApiModal('new')">+ 新建密钥</button>
+          </div>
+        </div>
+
+        <!-- Base URL 提示 -->
+        <div class="api-base-url">
+          <span style="font-size:11px;font-weight:700;color:var(--txm);letter-spacing:.4px;">BASE URL</span>
+          <code id="api-base-url-val">https://sso.example.com/v1</code>
+          <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="copyText('https://sso.example.com/v1')">复制</button>
+        </div>
+
+        <!-- Tab：密钥管理 / 接口文档 / 调用测试 -->
+        <div class="tabs" style="margin-bottom:16px;">
+          <div class="tab active" onclick="switchApiTab('keys')">密钥管理</div>
+          <div class="tab" onclick="switchApiTab('docs')">接口文档</div>
+          <div class="tab" onclick="switchApiTab('test')">调用测试</div>
+        </div>
+
+        <!-- ── 密钥管理 ── -->
+        <div id="api-tab-keys">
+          <div class="card">
+            <div class="card-body" style="padding:0">
+              <table class="tbl">
+                <thead><tr><th>密钥名称</th><th>Token（前缀）</th><th>权限范围</th><th>最后调用</th><th>状态</th><th>操作</th></tr></thead>
+                <tbody id="api-keys-tbody">
+                  <!-- JS 渲染 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 接口文档 ── -->
+        <div id="api-tab-docs" style="display:none">
+          <div id="api-docs-list">
+            <!-- JS 渲染 -->
+          </div>
+        </div>
+
+        <!-- ── 调用测试 ── -->
+        <div id="api-tab-test" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <!-- 左：请求构造 -->
+            <div class="card">
+              <div class="card-header"><h3>构造请求</h3></div>
+              <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+                <div class="form-row">
+                  <label>接口</label>
+                  <select id="test-endpoint" onchange="updateTestExample()">
+                    <option value="GET /v1/auth/verify">GET /v1/auth/verify — 验证 Token</option>
+                    <option value="GET /v1/users">GET /v1/users — 获取用户列表</option>
+                    <option value="GET /v1/users/{uid}">GET /v1/users/{uid} — 获取单个用户</option>
+                    <option value="POST /v1/users/{uid}/disable">POST /v1/users/{uid}/disable — 停用账号</option>
+                    <option value="DELETE /v1/users/{uid}/realname">DELETE /v1/users/{uid}/realname — 删除实名</option>
+                    <option value="GET /v1/apps">GET /v1/apps — 获取应用列表</option>
+                    <option value="POST /v1/sms/send">POST /v1/sms/send — 发送短信</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label>Bearer Token</label>
+                  <input type="text" id="test-token" placeholder="sk-live-xxxxxxxxxxxxxxxx" style="font-family:monospace;font-size:11px;"/>
+                </div>
+                <div class="form-row">
+                  <label>请求体 (JSON，可选)</label>
+                  <textarea id="test-body" rows="4" style="width:100%;padding:8px 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:2px;color:var(--tx);font-size:12px;font-family:monospace;outline:none;resize:vertical;font-family:monospace;" placeholder='{"uid": "00142"}'></textarea>
+                </div>
+                <button class="btn primary" onclick="runApiTest()" style="justify-content:center;">▶ 发送请求</button>
+              </div>
+            </div>
+            <!-- 右：响应结果 -->
+            <div class="card">
+              <div class="card-header">
+                <h3>响应结果</h3>
+                <span id="test-status-badge"></span>
+              </div>
+              <div class="card-body" style="padding:0">
+                <pre id="test-response" style="padding:14px;font-size:12px;font-family:monospace;color:var(--txm);min-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all;">// 点击「发送请求」查看结果</pre>
+              </div>
+            </div>
+          </div>
+          <!-- curl 示例 -->
+          <div class="card" style="margin-top:14px;">
+            <div class="card-header"><h3>cURL 示例</h3><button class="btn" style="font-size:11px;padding:3px 10px;" onclick="copyText(document.getElementById('curl-example').textContent)">复制</button></div>
+            <div class="card-body" style="padding:0">
+              <pre id="curl-example" style="padding:14px;font-size:12px;font-family:monospace;color:var(--ac);overflow:auto;white-space:pre-wrap;"></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- API 密钥 Modal -->
+      <div class="modal-mask" id="api-modal">
+        <div class="modal" style="min-width:460px;text-align:left;padding:0;overflow:hidden;">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">🔑</span>
+            <div style="flex:1;font-size:14px;font-weight:700;" id="api-modal-title">新建 API 密钥</div>
+            <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="closeApiModal()">关闭</button>
+          </div>
+          <div style="padding:18px 20px;display:flex;flex-direction:column;gap:12px;" id="api-modal-body">
+            <!-- JS 渲染 -->
+          </div>
+          <div style="padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;background:var(--bg);" id="api-modal-footer">
+            <button class="btn" onclick="closeApiModal()">取消</button>
+            <button class="btn primary" onclick="saveApiKey()">创建密钥</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ▸ 权限不足页面（受限功能占位） -->
+      <div class="page" id="page-locked">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:360px;gap:16px;text-align:center;padding:40px;">
+          <div style="width:64px;height:64px;border-radius:3px;background:var(--sf2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:28px;">🔒</div>
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--tx);margin-bottom:6px;">功能未开放</div>
+            <div style="font-size:13px;color:var(--txm);">「<span id="locked-feature-name"></span>」仅超级管理员（Lv.1）可操作</div>
+            <div style="font-size:12px;color:var(--txd);margin-top:6px;">如需访问，请联系超级管理员开通权限</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn" onclick="goto('adm-users')">← 返回用户管理</button>
+            <button class="btn primary" onclick="showToast('✓ 已向超级管理员发送权限申请')">申请权限</button>
+          </div>
+          <div style="margin-top:8px;padding:10px 18px;background:var(--sf2);border:1px solid var(--bd);border-radius:2px;font-size:11px;color:var(--txm);max-width:380px;line-height:1.7;">
+            当前角色权限不足。超级管理员可在「等级管理」中调整各角色的功能访问范围。
+          </div>
+        </div>
+      </div>
+
+      <!-- 等级编辑 Modal -->
+      <div class="modal-mask" id="lvl-modal">
+        <div class="modal" style="min-width:540px;max-width:660px;text-align:left;padding:0;overflow:hidden;">
+          <div style="padding:18px 22px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+            <div style="font-size:18px;" id="lm-icon">📝</div>
+            <div style="flex:1;">
+              <div style="font-size:15px;font-weight:700;" id="lm-title">编辑等级</div>
+              <div style="font-size:11px;color:var(--txd);" id="lm-sub">修改该等级的名称、描述与可用服务</div>
+            </div>
+            <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="closeLvlModal()">关闭</button>
+          </div>
+          <div style="padding:20px 22px;max-height:520px;overflow-y:auto;">
+            <!-- 基本信息 -->
+            <div style="margin-bottom:16px;">
+              <div style="font-size:10px;font-weight:700;color:var(--txd);letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px;">基本信息</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="form-row"><label>等级名称</label><input type="text" id="lm-name" /></div>
+                <div class="form-row"><label>等级编号</label><input type="text" id="lm-num" readonly style="background:var(--bg);color:var(--txd)"/></div>
+                <div class="form-row" style="grid-column:1/-1;"><label>等级描述</label><input type="text" id="lm-desc-input"/></div>
+              </div>
+            </div>
+            <!-- 可用服务权限 -->
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--txd);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px;">可用服务权限</div>
+              <div id="lm-perms" style="display:flex;flex-direction:column;gap:0;border:1px solid var(--bd);border-radius:2px;overflow:hidden;">
+                <!-- 由 JS 渲染 -->
+              </div>
+            </div>
+          </div>
+          <div style="padding:14px 22px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;background:var(--bg);">
+            <button class="btn" onclick="closeLvlModal()">取消</button>
+            <button class="btn primary" onclick="saveLvlModal()">保存修改</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+      <!-- ▸ 管理端：环境变量 -->
+      <div class="page" id="page-adm-env">
+
+        <!-- 顶部说明 + 操作栏 -->
+        <div class="env-topbar">
+          <div>
+            <div style="font-size:13px;font-weight:700;">接口环境变量配置</div>
+            <div style="font-size:12px;color:var(--txm);margin-top:3px;">管理系统所有外部接口的密钥、AppID 等配置项。标记 <span style="color:var(--err);font-weight:700;">*必填</span> 的变量缺失将导致对应功能不可用。</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button class="btn" onclick="exportEnv()">↓ 导出 .env</button>
+            <button class="btn primary" onclick="saveAllEnv()">保存所有修改</button>
+          </div>
+        </div>
+
+        <!-- 分组标签 -->
+        <div class="env-group-tabs" id="env-group-tabs">
+          <!-- JS 渲染 -->
+        </div>
+
+        <!-- 变量卡片 -->
+        <div id="env-cards">
+          <!-- JS 渲染 -->
+        </div>
+
+      </div>
+
+<!-- 签到弹窗 -->
+<div class="modal-mask" id="ck-modal">
+  <div class="modal">
+    <div style="font-size:36px;margin-bottom:12px;">🎉</div>
+    <h3>签到成功！</h3>
+    <p>今日获得积分奖励</p>
+    <div class="pts-big">+10</div>
+    <p style="margin-top:8px;font-size:12px;color:var(--txd);" id="ck-modal-sub">加载中…</p>
+    <button class="btn primary" style="margin-top:20px;width:100%;justify-content:center;" onclick="closeModal()">确认</button>
+  </div>
+</div>
+
+<!-- 绑定弹窗 -->
+<div class="modal-mask" id="bind-modal">
+  <div class="modal" style="min-width:360px;">
+    <div style="font-size:32px;margin-bottom:10px;" id="bind-icon">🏢</div>
+    <h3 id="bind-title">绑定企业微信</h3>
+    <p id="bind-desc" style="margin-bottom:16px;">请使用企业微信扫描下方二维码完成绑定</p>
+    <!-- 伪二维码 -->
+    <div style="width:140px;height:140px;border:1px solid var(--bd);border-radius:2px;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
+      <svg width="110" height="110" viewBox="0 0 100 100" style="opacity:.2;color:var(--tx)" xmlns="http://www.w3.org/2000/svg">
+        <rect x="5" y="5" width="30" height="30" rx="1" fill="none" stroke="currentColor" stroke-width="3"/>
+        <rect x="12" y="12" width="16" height="16" fill="currentColor"/>
+        <rect x="65" y="5" width="30" height="30" rx="1" fill="none" stroke="currentColor" stroke-width="3"/>
+        <rect x="72" y="12" width="16" height="16" fill="currentColor"/>
+        <rect x="5" y="65" width="30" height="30" rx="1" fill="none" stroke="currentColor" stroke-width="3"/>
+        <rect x="12" y="72" width="16" height="16" fill="currentColor"/>
+        <rect x="42" y="5" width="6" height="6" fill="currentColor"/>
+        <rect x="52" y="14" width="6" height="6" fill="currentColor"/>
+        <rect x="42" y="42" width="6" height="6" fill="currentColor"/>
+        <rect x="62" y="52" width="6" height="6" fill="currentColor"/>
+        <rect x="72" y="72" width="6" height="6" fill="currentColor"/>
+      </svg>
+    </div>
+    <p style="font-size:11px;color:var(--txd);margin-bottom:16px;">二维码 5 分钟内有效，过期请刷新</p>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" style="flex:1;justify-content:center;" onclick="closeBindModal()">取消</button>
+      <button class="btn primary" style="flex:1;justify-content:center;" onclick="closeBindModal();showToast('✓ 绑定成功')">模拟完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 用户数据 ──
+const USERS = [
+  {
+    name:'张三丰', uid:'#00142', status:'在职',
+    email:'zhangsan@example.com', phone:'138****8888',
+    reg:'2022-03-15', lastLogin:'2025-06-23 09:14',
+    realName:'张 * 丰', idTail:'****1234', verified:true,
+    methods:['邮箱','微信','手机号'],
+    apps:['企业OA','项目协作台'],
+    points:380
+  },
+  {
+    name:'李娜', uid:'#00098', status:'在职',
+    email:'lina@example.com', phone:'139****2222',
+    reg:'2021-07-08', lastLogin:'2025-06-23 08:55',
+    realName:'李 * ', idTail:'****5678', verified:true,
+    methods:['邮箱','手机号'],
+    apps:['企业OA','数据分析台'],
+    points:520
+  },
+  {
+    name:'王芳', uid:'#00201', status:'已停用',
+    email:'wangfang@example.com', phone:'136****3333',
+    reg:'2020-11-05', lastLogin:'2025-06-22 17:10',
+    realName:'—', idTail:'—', verified:false,
+    methods:['邮箱'],
+    apps:[],
+    points:90
+  },
+  {
+    name:'陈浩', uid:'#00055', status:'在职',
+    email:'chenhao@example.com', phone:'135****4444',
+    reg:'2019-05-20', lastLogin:'2025-06-23 08:31',
+    realName:'陈 * ', idTail:'****9012', verified:true,
+    methods:['邮箱','钉钉','手机号'],
+    apps:['项目协作台','数据分析台'],
+    points:1240
+  },
+  {
+    name:'周晓红', uid:'#00317', status:'在职',
+    email:'zhouxh@example.com', phone:'133****5555',
+    reg:'2023-01-10', lastLogin:'2025-06-22 23:47',
+    realName:'周 * 红', idTail:'****3456', verified:true,
+    methods:['邮箱','手机号','微信'],
+    apps:['数据分析台'],
+    points:210
+  }
+];
+
+// ── 导航 ──
+let currentMode = 'user';
+let checkedIn = false;
+
+// 管理员角色：superadmin / ops / readonly
+// 对应等级管理中的 管理员 Lv.1 / Lv.2 / Lv.3
+let adminRole = 'superadmin';
+
+// 仅超级管理员可访问的页面
+const SUPERADMIN_ONLY = ['adm-levels', 'adm-env'];
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('nav-user').style.display = mode==='user' ? '' : 'none';
+  document.getElementById('nav-admin').style.display = mode==='admin' ? '' : 'none';
+  document.getElementById('mode-user').classList.toggle('active', mode==='user');
+  document.getElementById('mode-admin').classList.toggle('active', mode==='admin');
+  updateRestrictedNavItems();
+  if(mode === 'user') goto('home');
+  else goto('adm-users');
+}
+
+function updateRestrictedNavItems() {
+  // 受限导航项：非超管时置灰 + 加锁图标
+  SUPERADMIN_ONLY.forEach(page => {
+    const ni = document.getElementById('ni-' + page);
+    if (!ni) return;
+    const locked = adminRole !== 'superadmin';
+    ni.style.opacity    = locked ? '0.4' : '1';
+    ni.style.cursor     = locked ? 'not-allowed' : 'pointer';
+    ni.title            = locked ? '仅超级管理员可访问' : '';
+    // 锁图标（第一次才插入）
+    if (locked && !ni.querySelector('.lock-icon')) {
+      const lock = document.createElement('span');
+      lock.className = 'lock-icon';
+      lock.textContent = '🔒';
+      lock.style.cssText = 'font-size:10px;margin-left:auto;';
+      ni.appendChild(lock);
+    } else if (!locked) {
+      const lock = ni.querySelector('.lock-icon');
+      if (lock) lock.remove();
+    }
+  });
+}
+
+function goto(page) {
+  // 权限拦截：受限页面非超管不可进入
+  if (SUPERADMIN_ONLY.includes(page) && adminRole !== 'superadmin') {
+    showLockedPage(page);
+    return;
+  }
+
+  // 隐藏所有页面
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-'+page);
+  if(el) el.classList.add('active');
+
+  // 高亮导航
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const ni = document.getElementById('ni-'+page);
+  if(ni) ni.classList.add('active');
+
+  // 更新标题
+  const titles = {
+    'home':'首页','apps':'应用管理','account':'账号设定',
+    'adm-users':'用户管理','adm-apps':'应用管理','adm-logs':'登录日志','adm-levels':'等级管理','adm-env':'环境变量','adm-api':'API 调用'
+  };
+  document.getElementById('page-title').textContent = titles[page] || page;
+
+  // 渲染首个用户详情
+  if(page === 'adm-users') { loadAdmStats(); loadAdmUsers(); }
+  if(page === 'adm-levels') switchLvlGroup(currentLvlGroup);
+  if(page === 'adm-env') renderEnvPage();
+  if(page === 'adm-api') renderApiPage();
+  if(page === 'adm-apps') renderAdmApps();
+  if(page === 'adm-logs') loadAdmLogs();
+  if(page === 'apps') renderMarket();
+  if(page === 'home') loadHome();
+}
+
+function showLockedPage(page) {
+  // 隐藏所有页面，高亮导航项（置灰状态），显示锁定提示页
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-locked').classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const ni = document.getElementById('ni-' + page);
+  if (ni) ni.classList.add('active');
+
+  const titles = { 'adm-levels':'等级管理', 'adm-env':'环境变量' };
+  document.getElementById('page-title').textContent = titles[page] || page;
+  document.getElementById('locked-feature-name').textContent = titles[page] || page;
+}
+
+// ── Tab 切换 ──
+function switchTab(show, hide, el, allTabs) {
+  document.getElementById(show).style.display = '';
+  document.getElementById(hide).style.display = 'none';
+  allTabs.forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function switchTabEl(show, hide, el) {
+  document.getElementById(show).style.display = '';
+  document.getElementById(hide).style.display = 'none';
+  el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── 签到 ──
+function doCheckin() {
+  if(checkedIn) return;
+  checkedIn = true;
+  document.getElementById('ck-btn').textContent = '✓ 已签到';
+  document.getElementById('ck-btn').disabled = true;
+  document.getElementById('ck-today').classList.add('done');
+  document.getElementById('ck-modal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('ck-modal').classList.remove('show');
+}
+
+// ── 绑定弹窗 ──
+const bindIcons = {wecom:'🏢', feishu:'📗', dingtalk:'📌'};
+const bindDescs = {
+  wecom:'请使用企业微信 App 扫描下方二维码完成绑定',
+  feishu:'将跳转至飞书授权页面，完成账号绑定',
+  dingtalk:'将跳转至钉钉授权页面，完成账号绑定'
+};
+
+function showBindModal(name, key) {
+  document.getElementById('bind-icon').textContent = bindIcons[key] || '🔗';
+  document.getElementById('bind-title').textContent = '绑定' + name;
+  document.getElementById('bind-desc').textContent = bindDescs[key] || '请完成账号绑定';
+  document.getElementById('bind-modal').classList.add('show');
+}
+
+function closeBindModal() {
+  document.getElementById('bind-modal').classList.remove('show');
+}
+
+// ── 用户详情 ──
+function selectUser(el, idx) {
+  document.querySelectorAll('.detail-list-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  renderUserDetail(idx);
+}
+
+function renderUserDetail(idx) {
+  const u = USERS[idx];
+  const statusBadge = u.status==='在职'
+    ? `<span class="badge ok">${u.status}</span>`
+    : `<span class="badge err">${u.status}</span>`;
+  const rnHtml = u.verified
+    ? `<div class="rn-box"><div style="font-size:18px;">🪪</div><div style="flex:1"><div class="rn-name">${u.realName}</div><div class="rn-info">尾号 ${u.idTail} · 已实名</div></div><button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:3px 8px;" onclick="showToast('⚠️ 实名信息已删除')">删除</button></div>
+     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+       <span style="font-size:10px;padding:3px 7px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);color:var(--txm);">☁️ 阿里云实人认证</span>
+       <span style="font-size:10px;padding:3px 7px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);color:var(--txm);">🪪 活体 + 身份证</span>
+     </div>`
+    : `<div style="color:var(--txd);font-size:12px;padding:8px 0;">未完成实名认证</div>
+     <button class="btn" style="font-size:11px;margin-top:4px;" onclick="showToast('→ 发送实名认证链接给用户')">发送认证链接</button>`;
+
+  document.getElementById('user-detail-panel').innerHTML = `
+    <div class="detail-section">
+      <h4>基本信息</h4>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">姓名</div><div class="v">${u.name}</div></div>
+        <div class="kv"><div class="k">用户编号</div><div class="v">${u.uid}</div></div>
+        <div class="kv"><div class="k">状态</div><div class="v">${statusBadge}</div></div>
+        <div class="kv"><div class="k">积分</div><div class="v">${u.points} pts</div></div>
+        <div class="kv"><div class="k">邮箱</div><div class="v">${u.email}</div></div>
+        <div class="kv"><div class="k">手机</div><div class="v">${u.phone}</div></div>
+        <div class="kv"><div class="k">注册日期</div><div class="v">${u.reg}</div></div>
+        <div class="kv"><div class="k">最近登录</div><div class="v">${u.lastLogin}</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h4>实名认证</h4>
+      ${rnHtml}
+    </div>
+    <div class="detail-section">
+      <h4>登录方式</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${u.methods.map(m=>`<span class="badge ac">${m}</span>`).join('')}</div>
+    </div>
+    <div class="detail-section">
+      <h4>授权应用</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">${u.apps.length ? u.apps.map(a=>`<span class="badge grey">${a}</span>`).join('') : '<span style="font-size:12px;color:var(--txd);">暂无</span>'}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn" style="font-size:11px;" onclick="showToast('✓ 已发送重置密码邮件')">重置密码</button>
+      ${u.status==='在职'
+        ? `<button class="btn" style="font-size:11px;color:var(--err);border-color:var(--err);" onclick="showToast('⚠️ 账号已停用')">停用账号</button>`
+        : `<button class="btn primary" style="font-size:11px;" onclick="showToast('✓ 账号已恢复')">恢复账号</button>`
+      }
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════
+// 共享应用列表数据（用户端市场 ↔ 管理端编辑）
+// ══════════════════════════════════════════
+const APP_LIST = [
+  { id:'app_oa_001',    name:'企业 OA 系统',   icon:'📋', iconBg:'#E8F4FF', desc:'内部工单与审批流程管理', clientId:'app_oa_001',    callback:'https://oa.example.com/cb',         authUsers:342, status:'enabled',  visible:true,  userAuthed:true  },
+  { id:'app_bi_002',    name:'数据分析台',      icon:'📊', iconBg:'#F0FFED', desc:'业务数据可视化与报表',   clientId:'app_bi_002',    callback:'https://bi.example.com/auth/cb',    authUsers:218, status:'enabled',  visible:true,  userAuthed:true  },
+  { id:'app_collab_003',name:'项目协作台',      icon:'💬', iconBg:'#FFF8E0', desc:'多人在线协同文档与任务', clientId:'app_collab_003',callback:'https://collab.example.com/sso',    authUsers:156, status:'enabled',  visible:true,  userAuthed:true  },
+  { id:'app_msg_004',   name:'消息推送服务',    icon:'🔔', iconBg:'#F4EEFF', desc:'企微/钉钉/邮件统一通知', clientId:'app_msg_004',   callback:'https://msg.example.com/callback',  authUsers:0,   status:'enabled',  visible:true,  userAuthed:false },
+  { id:'app_arc_005',   name:'档案管理系统',    icon:'🗂️', iconBg:'#FFEEED', desc:'合同与文档电子归档',     clientId:'app_arc_005',   callback:'https://arc.example.com/callback',  authUsers:0,   status:'pending',  visible:false, userAuthed:false },
+];
+
+// ── 用户端：渲染应用市场 ──
+function renderMarket() {
+  const q   = (document.getElementById('market-search')?.value || '').toLowerCase();
+  const grid = document.getElementById('market-grid');
+  if (!grid) return;
+  const visible = APP_LIST.filter(a => a.visible && (!q || a.name.includes(q) || a.desc.includes(q)));
+  grid.innerHTML = visible.map(a => `
+    <div class="app-card">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="app-icon" style="background:${a.iconBg}">${a.icon}</div>
+        <div>
+          <div class="app-name">${a.name}</div>
+          <div class="app-desc">${a.desc}</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        ${a.userAuthed
+          ? `<span class="badge ok">已授权</span><button class="btn" style="font-size:11px;padding:4px 10px;">管理</button>`
+          : `<span class="badge grey">未授权</span><button class="btn primary" style="font-size:11px;padding:4px 10px;" onclick="userAuthApp('${a.id}')">授权</button>`
+        }
+      </div>
+    </div>`).join('') + `
+    <div class="app-card" style="border-style:dashed;border-color:var(--bd2);justify-content:center;align-items:center;min-height:110px;color:var(--txd);">
+      <div style="text-align:center;"><div style="font-size:24px;margin-bottom:4px;">＋</div><div style="font-size:12px;">申请接入新应用</div></div>
+    </div>`;
+}
+
+function userAuthApp(id) {
+  const a = APP_LIST.find(a => a.id === id);
+  if (a) { a.userAuthed = true; renderMarket(); showToast('✓ 已授权 ' + a.name); }
+}
+
+// ── 管理端：渲染应用列表 ──
+function renderAdmApps() {
+  const tbody = document.querySelector('#page-adm-apps tbody');
+  if (!tbody) return;
+  tbody.innerHTML = APP_LIST.map(a => `
+    <tr>
+      <td><span style="font-weight:600;">${a.icon} ${a.name}</span></td>
+      <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:2px;">${a.clientId}</code></td>
+      <td style="font-size:12px;color:var(--txm);">${a.callback}</td>
+      <td>${a.authUsers}</td>
+      <td>
+        ${a.status==='enabled'  ? '<span class="badge ok">启用</span>'   : ''}
+        ${a.status==='pending'  ? '<span class="badge warn">待审核</span>': ''}
+        ${a.status==='disabled' ? '<span class="badge err">已停用</span>' : ''}
+        ${a.visible ? '' : '<span class="badge grey" style="margin-left:4px;">用户不可见</span>'}
+      </td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="openAppEdit('${a.id}')">编辑</button>
+        ${a.status==='pending' ? `<button class="btn primary" style="font-size:11px;padding:3px 8px;" onclick="approveApp('${a.id}')">审核通过</button>` : ''}
+      </td>
+    </tr>`).join('');
+}
+
+function approveApp(id) {
+  const a = APP_LIST.find(a => a.id === id);
+  if (a) { a.status = 'enabled'; a.visible = true; renderAdmApps(); showToast('✓ 已审核通过并上架：' + a.name); }
+}
+
+// 应用编辑弹窗
+let editingAppId = null;
+function openAppEdit(id) {
+  editingAppId = id;
+  const a = APP_LIST.find(a => a.id === id);
+  if (!a) return;
+  // 复用 bind-modal 作为编辑弹窗
+  document.getElementById('bind-icon').textContent = a.icon;
+  document.getElementById('bind-title').textContent = '编辑应用：' + a.name;
+  document.getElementById('bind-desc').textContent  = '';
+  document.getElementById('bind-modal').innerHTML = `
+    <div class="modal" style="min-width:500px;text-align:left;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">${a.icon}</span>
+        <div style="flex:1;font-size:14px;font-weight:700;">编辑应用：${a.name}</div>
+        <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="closeAppEdit()">关闭</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:11px;">
+        <div class="settings-grid">
+          <div class="form-row"><label>应用名称</label><input type="text" id="ae-name" value="${a.name}"/></div>
+          <div class="form-row"><label>应用图标（Emoji）</label><input type="text" id="ae-icon" value="${a.icon}" maxlength="2"/></div>
+          <div class="form-row full"><label>应用描述</label><input type="text" id="ae-desc" value="${a.desc}"/></div>
+          <div class="form-row full"><label>回调地址</label><input type="text" id="ae-cb" value="${a.callback}" style="font-family:monospace;font-size:12px;"/></div>
+          <div class="form-row"><label>用户端可见</label>
+            <select id="ae-visible">
+              <option value="true"  ${a.visible?'selected':''}>是（在应用市场展示）</option>
+              <option value="false" ${!a.visible?'selected':''}>否（隐藏）</option>
+            </select>
+          </div>
+          <div class="form-row"><label>状态</label>
+            <select id="ae-status">
+              <option value="enabled"  ${a.status==='enabled'?'selected':''}>启用</option>
+              <option value="disabled" ${a.status==='disabled'?'selected':''}>停用</option>
+              <option value="pending"  ${a.status==='pending'?'selected':''}>待审核</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;background:var(--bg);">
+        <button class="btn" onclick="closeAppEdit()">取消</button>
+        <button class="btn primary" onclick="saveAppEdit()">保存修改</button>
+      </div>
+    </div>`;
+  document.getElementById('bind-modal').classList.add('show');
+}
+
+function closeAppEdit() {
+  document.getElementById('bind-modal').classList.remove('show');
+  // 恢复原始 bind-modal 结构（简单刷新即可，实际项目不需要）
+  location.reload(); // demo 用途
+}
+
+function saveAppEdit() {
+  const a = APP_LIST.find(a => a.id === editingAppId);
+  if (!a) return;
+  a.name    = document.getElementById('ae-name').value.trim()    || a.name;
+  a.icon    = document.getElementById('ae-icon').value.trim()    || a.icon;
+  a.desc    = document.getElementById('ae-desc').value.trim()    || a.desc;
+  a.callback= document.getElementById('ae-cb').value.trim()      || a.callback;
+  a.visible = document.getElementById('ae-visible').value === 'true';
+  a.status  = document.getElementById('ae-status').value;
+  document.getElementById('bind-modal').classList.remove('show');
+  renderAdmApps();
+  renderMarket();
+  showToast('✓ 应用信息已更新');
+}
+
+// ── KYC 实名认证状态 ──
+let kycVerified = true;
+
+function renderKycCard() {
+  const badge = document.getElementById('kyc-badge');
+  const body  = document.getElementById('kyc-body');
+  if (!badge || !body) return;
+  if (kycVerified) {
+    badge.className = 'badge ok'; badge.textContent = '已认证';
+    body.innerHTML = `
+      <div class="rn-box">
+        <div style="font-size:22px;">🪪</div>
+        <div style="flex:1">
+          <div class="rn-name">张 * 丰</div>
+          <div class="rn-info">身份证尾号 ****1234 · 已完成实名认证</div>
+        </div>
+        <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;" onclick="deleteKyc()">删除实名信息</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);font-size:11px;"><span>☁️</span><span style="font-weight:600;color:var(--txm);">认证服务</span><span>阿里云实人认证</span></div>
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);font-size:11px;"><span>🪪</span><span style="font-weight:600;color:var(--txm);">认证方式</span><span>活体人脸 + 身份证</span></div>
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);font-size:11px;"><span>🕐</span><span style="font-weight:600;color:var(--txm);">认证时间</span><span>2022-03-16 10:22</span></div>
+      </div>
+      <p style="font-size:11px;color:var(--txd);margin-top:10px;">认证后不支持修改，但可删除后重新认证。删除后实名状态立即清除。</p>`;
+  } else {
+    badge.className = 'badge grey'; badge.textContent = '未认证';
+    body.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:4px 0;">
+        <div style="font-size:13px;color:var(--txm);">尚未完成实名认证。认证后可解锁更多功能，且由认证接口自动完成，平台不存储原始证件信息。</div>
+        <button class="btn primary" onclick="startKyc()">开始实名认证 →</button>
+      </div>`;
+  }
+}
+
+function deleteKyc() {
+  if (!confirm('确认删除实名信息？删除后需重新认证。')) return;
+  kycVerified = false;
+  renderKycCard();
+  showToast('⚠️ 实名信息已删除');
+}
+
+function startKyc() {
+  showToast('→ 正在跳转实名认证流程（演示）');
+  setTimeout(() => { kycVerified = true; renderKycCard(); showToast('✓ 实名认证完成'); }, 1500);
+}
+
+// ══════════════════════════════════════════
+// API 调用管理
+// ══════════════════════════════════════════
+const API_KEYS = [
+  { id:'k1', name:'主系统对接',     token:'sk-live-a1b2c3d4e5f6',  scopes:['users:read','auth:verify'],             lastCall:'2025-06-23 09:01', status:'active'   },
+  { id:'k2', name:'数据同步服务',   token:'sk-live-z9y8x7w6v5u4',  scopes:['users:read','users:write','apps:read'],  lastCall:'2025-06-22 18:45', status:'active'   },
+  { id:'k3', name:'旧版 ERP（废弃）',token:'sk-live-m1n2o3p4q5r6',  scopes:['users:read'],                           lastCall:'2025-05-10 11:30', status:'revoked'  },
+];
+
+const ALL_SCOPES = [
+  { key:'auth:verify',    label:'验证 Token',      desc:'POST /v1/auth/verify — 验证用户 Token 有效性' },
+  { key:'users:read',     label:'读取用户',         desc:'GET /v1/users、/v1/users/{uid}' },
+  { key:'users:write',    label:'修改用户',         desc:'POST /v1/users/{uid}/disable、/v1/users/{uid}/enable' },
+  { key:'users:kyc',      label:'操作实名信息',      desc:'DELETE /v1/users/{uid}/realname' },
+  { key:'apps:read',      label:'读取应用',         desc:'GET /v1/apps、/v1/apps/{id}' },
+  { key:'apps:write',     label:'管理应用',         desc:'POST /v1/apps、PUT /v1/apps/{id}' },
+  { key:'sms:send',       label:'发送短信',         desc:'POST /v1/sms/send（受频率限制）' },
+  { key:'logs:read',      label:'读取日志',         desc:'GET /v1/logs' },
+];
+
+const API_DOCS = [
+  {
+    method:'GET', path:'/v1/auth/verify', summary:'验证用户 Token',
+    scope:'auth:verify', auth:true,
+    params:[],
+    headers:[{name:'Authorization',req:true,desc:'Bearer <user_token>  — 要验证的用户 Token'}],
+    response:`{
+  "valid": true,
+  "user": {
+    "uid": "00142",
+    "name": "张三丰",
+    "email": "zhangsan@example.com",
+    "verified": true,
+    "level": 3
+  }
+}`,
+  },
+  {
+    method:'GET', path:'/v1/users', summary:'获取用户列表',
+    scope:'users:read', auth:true,
+    params:[
+      {name:'page',  req:false, type:'number', desc:'页码，默认 1'},
+      {name:'limit', req:false, type:'number', desc:'每页条数，默认 20，最大 100'},
+      {name:'status',req:false, type:'string', desc:'active / disabled，不传则返回全部'},
+    ],
+    headers:[],
+    response:`{
+  "total": 1482,
+  "page": 1,
+  "data": [
+    { "uid": "00142", "name": "张三丰", "email": "zhangsan@example.com", "status": "active", "level": 3 }
+  ]
+}`,
+  },
+  {
+    method:'GET', path:'/v1/users/{uid}', summary:'获取单个用户详情',
+    scope:'users:read', auth:true,
+    params:[{name:'uid', req:true, type:'string', desc:'用户编号，如 00142'}],
+    headers:[],
+    response:`{
+  "uid": "00142",
+  "name": "张三丰",
+  "email": "zhangsan@example.com",
+  "phone": "138****8888",
+  "status": "active",
+  "level": 3,
+  "verified": true,
+  "createdAt": "2022-03-15T08:00:00Z"
+}`,
+  },
+  {
+    method:'POST', path:'/v1/users/{uid}/disable', summary:'停用账号',
+    scope:'users:write', auth:true,
+    params:[{name:'uid',req:true,type:'string',desc:'用户编号'}],
+    headers:[],
+    response:`{ "success": true, "uid": "00142", "status": "disabled" }`,
+  },
+  {
+    method:'DELETE', path:'/v1/users/{uid}/realname', summary:'删除用户实名信息',
+    scope:'users:kyc', auth:true,
+    params:[{name:'uid',req:true,type:'string',desc:'用户编号'}],
+    headers:[],
+    response:`{ "success": true, "uid": "00142", "verified": false }`,
+  },
+  {
+    method:'GET', path:'/v1/apps', summary:'获取应用列表',
+    scope:'apps:read', auth:true,
+    params:[{name:'status',req:false,type:'string',desc:'enabled / pending / disabled'}],
+    headers:[],
+    response:`{
+  "total": 5,
+  "data": [
+    { "id": "app_oa_001", "name": "企业 OA 系统", "status": "enabled", "authUsers": 342 }
+  ]
+}`,
+  },
+  {
+    method:'POST', path:'/v1/sms/send', summary:'发送短信',
+    scope:'sms:send', auth:true,
+    params:[
+      {name:'phone',req:true, type:'string',desc:'手机号，支持 E.164 格式'},
+      {name:'template',req:true, type:'string',desc:'模板 key，如 verify_code'},
+      {name:'params', req:false,type:'object',desc:'模板变量，如 {"code":"123456"}'},
+    ],
+    headers:[],
+    response:`{ "success": true, "msgId": "sms_20250623_001" }`,
+  },
+];
+
+let currentApiTab = 'keys';
+
+function renderApiPage() {
+  renderApiKeys();
+  renderApiDocs();
+  updateTestExample();
+}
+
+function switchApiTab(tab) {
+  currentApiTab = tab;
+  ['keys','docs','test'].forEach(t => {
+    document.getElementById('api-tab-'+t).style.display = t===tab ? 'block' : 'none';
+  });
+  document.querySelectorAll('#page-adm-api .tab').forEach((el,i) => {
+    el.classList.toggle('active', ['keys','docs','test'][i]===tab);
+  });
+}
+
+function renderApiKeys() {
+  const tbody = document.getElementById('api-keys-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = API_KEYS.map(k => `
+    <tr>
+      <td style="font-weight:600;">${k.name}</td>
+      <td><code style="font-size:11px;background:var(--bg);padding:2px 8px;border-radius:2px;font-family:monospace;">${k.token.slice(0,18)}…</code>
+          <button class="btn" style="font-size:10px;padding:2px 7px;margin-left:4px;" onclick="copyText('${k.token}')">复制</button></td>
+      <td>${k.scopes.map(s=>`<span class="badge ac" style="font-size:10px;margin-right:3px;">${s}</span>`).join('')}</td>
+      <td style="font-size:12px;color:var(--txm);">${k.lastCall}</td>
+      <td>${k.status==='active'?'<span class="badge ok">活跃</span>':'<span class="badge err">已撤销</span>'}</td>
+      <td style="display:flex;gap:4px;">
+        ${k.status==='active'
+          ? `<button class="btn" style="font-size:11px;padding:3px 8px;" onclick="revokeKey('${k.id}')">撤销</button>`
+          : `<span style="font-size:11px;color:var(--txd);">—</span>`}
+      </td>
+    </tr>`).join('');
+}
+
+function revokeKey(id) {
+  const k = API_KEYS.find(k => k.id === id);
+  if (k && confirm(`确认撤销密钥「${k.name}」？撤销后立即失效且不可恢复。`)) {
+    k.status = 'revoked'; renderApiKeys(); showToast('⚠️ 密钥已撤销');
+  }
+}
+
+function renderApiDocs() {
+  const el = document.getElementById('api-docs-list');
+  if (!el) return;
+  el.innerHTML = API_DOCS.map((d,i) => {
+    const methodClass = d.method==='GET'?'method-get':d.method==='POST'?'method-post':'method-delete';
+    const paramsHtml = d.params.length ? `
+      <div style="font-size:11px;font-weight:700;color:var(--txd);letter-spacing:.5px;text-transform:uppercase;margin-top:10px;margin-bottom:4px;">参数</div>
+      <table class="param-table">
+        <thead><tr><th>名称</th><th>类型</th><th>说明</th></tr></thead>
+        <tbody>${d.params.map(p=>`<tr>
+          <td><span class="param-name">${p.name}</span>${p.req?'<span class="param-req">*必填</span>':''}</td>
+          <td style="color:var(--txm);font-family:monospace;font-size:11px;">${p.type||'string'}</td>
+          <td style="color:var(--txm);">${p.desc}</td>
+        </tr>`).join('')}</tbody>
+      </table>` : '';
+    const headersHtml = d.headers.length ? `
+      <div style="font-size:11px;font-weight:700;color:var(--txd);letter-spacing:.5px;text-transform:uppercase;margin-top:10px;margin-bottom:4px;">请求头</div>
+      <table class="param-table">
+        <thead><tr><th>名称</th><th>说明</th></tr></thead>
+        <tbody>${d.headers.map(h=>`<tr>
+          <td><span class="param-name">${h.name}</span>${h.req?'<span class="param-req">*</span>':''}</td>
+          <td style="color:var(--txm);">${h.desc}</td>
+        </tr>`).join('')}</tbody>
+      </table>` : '';
+    return `
+    <div class="api-doc-item" id="doc-${i}">
+      <div class="api-doc-header" onclick="toggleDoc(${i})">
+        <span class="method-badge ${methodClass}">${d.method}</span>
+        <span class="api-path">${d.path}</span>
+        <span class="api-summary">${d.summary}</span>
+        <span class="badge ac" style="font-size:10px;margin-left:6px;">${d.scope}</span>
+        <span style="font-size:11px;color:var(--txd);margin-left:8px;">▾</span>
+      </div>
+      <div class="api-doc-body">
+        <div style="font-size:12px;color:var(--txm);margin-bottom:8px;">所需权限：<code style="font-size:11px;background:var(--sf);padding:2px 6px;border-radius:2px;">${d.scope}</code>  · 需携带 API Bearer Token</div>
+        ${paramsHtml}${headersHtml}
+        <div style="font-size:11px;font-weight:700;color:var(--txd);letter-spacing:.5px;text-transform:uppercase;margin-top:10px;margin-bottom:4px;">响应示例</div>
+        <div class="response-box"><pre>${d.response}</pre></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDoc(i) {
+  document.getElementById('doc-'+i)?.classList.toggle('open');
+}
+
+function updateTestExample() {
+  const sel = document.getElementById('test-endpoint');
+  if (!sel) return;
+  const [method, path] = sel.value.split(' ');
+  const token = document.getElementById('test-token')?.value || 'sk-live-your-api-key';
+  const baseUrl = 'https://sso.example.com';
+  const curl = `curl -X ${method} "${baseUrl}${path}" \\
+  -H "Authorization: Bearer ${token}" \\
+  -H "Content-Type: application/json"`;
+  const pre = document.getElementById('curl-example');
+  if (pre) pre.textContent = curl;
+}
+
+function runApiTest() {
+  const sel    = document.getElementById('test-endpoint');
+  const token  = document.getElementById('test-token')?.value;
+  const body   = document.getElementById('test-body')?.value;
+  const resEl  = document.getElementById('test-response');
+  const badgeEl= document.getElementById('test-status-badge');
+  if (!sel || !resEl) return;
+
+  // Mock 响应
+  const mockResp = {
+    'GET /v1/auth/verify':          {status:200, body:{ valid:true, user:{ uid:'00142', name:'张三丰', verified:true, level:3 }}},
+    'GET /v1/users':                {status:200, body:{ total:1482, page:1, data:[{ uid:'00142', name:'张三丰', status:'active', level:3 }]}},
+    'GET /v1/users/{uid}':          {status:200, body:{ uid:'00142', name:'张三丰', email:'zhangsan@example.com', status:'active', verified:true }},
+    'POST /v1/users/{uid}/disable': {status:200, body:{ success:true, uid:'00142', status:'disabled' }},
+    'DELETE /v1/users/{uid}/realname':{status:200, body:{ success:true, uid:'00142', verified:false }},
+    'GET /v1/apps':                 {status:200, body:{ total:5, data:APP_LIST.map(a=>({id:a.id,name:a.name,status:a.status})) }},
+    'POST /v1/sms/send':            {status:200, body:{ success:true, msgId:'sms_'+Date.now() }},
+  };
+
+  resEl.textContent = '请求中…';
+  badgeEl.innerHTML = '';
+  setTimeout(() => {
+    if (!token) {
+      resEl.textContent = '{"error":"missing_token","message":"Authorization header required"}';
+      badgeEl.innerHTML = '<span class="badge err">401</span>';
+      return;
+    }
+    const r = mockResp[sel.value] || { status:404, body:{ error:'not_found' }};
+    resEl.textContent = JSON.stringify(r.body, null, 2);
+    badgeEl.innerHTML = r.status===200
+      ? '<span class="badge ok">200 OK</span>'
+      : `<span class="badge err">${r.status}</span>`;
+    updateTestExample();
+  }, 400);
+}
+
+// 新建密钥弹窗
+function openApiModal() {
+  document.getElementById('api-modal-title').textContent = '新建 API 密钥';
+  document.getElementById('api-modal-body').innerHTML = `
+    <div class="form-row"><label>密钥名称</label><input type="text" id="new-key-name" placeholder="如：主系统对接"/></div>
+    <div class="form-row">
+      <label>权限范围（可多选）</label>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;border:1px solid var(--bd);border-radius:2px;overflow:hidden;">
+        ${ALL_SCOPES.map(s=>`
+        <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--bd);transition:background .15s;" onmouseenter="this.style.background='var(--sf2)'" onmouseleave="this.style.background=''">
+          <input type="checkbox" value="${s.key}" style="width:14px;height:14px;accent-color:var(--ac);flex-shrink:0;"/>
+          <div><div style="font-weight:600;color:var(--tx);">${s.label}</div><div style="color:var(--txd);font-size:11px;">${s.desc}</div></div>
+        </label>`).join('')}
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--txd);padding:8px 10px;background:var(--sf2);border-radius:2px;border:1px solid var(--bd);">
+      ⚠️ 密钥仅在创建时完整显示一次，请立即保存至安全位置。
+    </div>`;
+  document.getElementById('api-modal-footer').innerHTML = `
+    <button class="btn" onclick="closeApiModal()">取消</button>
+    <button class="btn primary" onclick="saveApiKey()">创建密钥</button>`;
+  document.getElementById('api-modal').classList.add('show');
+}
+
+function closeApiModal() {
+  document.getElementById('api-modal').classList.remove('show');
+}
+
+function saveApiKey() {
+  const name   = document.getElementById('new-key-name')?.value.trim();
+  const checked= [...document.querySelectorAll('#api-modal-body input[type=checkbox]:checked')].map(c=>c.value);
+  if (!name)           { showToast('⚠️ 请填写密钥名称'); return; }
+  if (!checked.length) { showToast('⚠️ 请至少选择一项权限'); return; }
+  const newToken = 'sk-live-' + Math.random().toString(36).slice(2,16);
+  API_KEYS.unshift({ id:'k'+Date.now(), name, token:newToken, scopes:checked, lastCall:'—', status:'active' });
+  // 展示完整 token 一次
+  document.getElementById('api-modal-title').textContent = '✓ 密钥已创建';
+  document.getElementById('api-modal-body').innerHTML = `
+    <div style="font-size:13px;color:var(--txm);margin-bottom:8px;">请立即复制并保存，此后不会再完整显示：</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--sf2);border:1px solid var(--ac3);border-radius:2px;">
+      <code id="new-token-val" style="flex:1;font-size:13px;font-family:monospace;font-weight:700;color:var(--ac);word-break:break-all;">${newToken}</code>
+      <button class="btn primary" style="flex-shrink:0;" onclick="copyText('${newToken}')">复制</button>
+    </div>`;
+  document.getElementById('api-modal-footer').innerHTML = `
+    <button class="btn primary" onclick="closeApiModal();renderApiKeys()">完成</button>`;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(()=>{});
+  showToast('✓ 已复制到剪贴板');
+}
+
+// ── 初始化 ──
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.style.display='none', 2500);
+}
+
+// ════════════════════════════════════════
+// 真实数据渲染函数 - 替换所有 mock
+// ════════════════════════════════════════
+
+// ── 用户端首页 ──
+async function loadHome() {
+  const { ok, data } = await api('GET', '/user/me');
+  if (!ok) return;
+  const u = data.user;
+  // 积分
+  document.querySelector('.pts-row').innerHTML = `
+    <div class="pts-card" style="background:var(--sf2);border-color:var(--ac3);">
+      <div class="pv">${u.points||0}</div><div class="pl">当前积分</div></div>
+    <div class="pts-card">
+      <div class="pv">${u.checkin_streak||0}</div><div class="pl">连续签到天数</div></div>`;
+
+  // 签到状态
+  const today = new Date().toISOString().slice(0,10);
+  const alreadyCheckin = u.last_checkin === today;
+  const ckBtn = document.getElementById('ck-btn');
+  if (ckBtn) { ckBtn.textContent = alreadyCheckin ? '✓ 今日已签到' : '✓ 立即签到'; ckBtn.disabled = alreadyCheckin; }
+  if (alreadyCheckin) document.getElementById('ck-today')?.classList.add('done');
+
+  // 登录日志
+  const logRes = await api('GET', '/user/login-logs');
+  if (logRes.ok) {
+    const tbody = document.querySelector('#page-home tbody');
+    if (tbody) {
+      tbody.innerHTML = logRes.data.logs.map(l => `<tr>
+        <td class="em">${fmtTime(l.created_at)}</td>
+        <td>${l.method}</td>
+        <td>${l.app_name}</td>
+        <td>${l.ip||'—'}</td>
+        <td style="font-size:11px;color:var(--txm);max-width:160px;overflow:hidden;text-overflow:ellipsis;">${(l.user_agent||'—').slice(0,40)}</td>
+        <td><span class="badge ${l.status==='success'?'ok':'err'}">${l.status==='success'?'成功':'失败'}</span></td>
+      </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--txd);padding:20px;">暂无记录</td></tr>';
+    }
+  }
+}
+
+// ── 签到 ──
+async function doCheckin() {
+  const { ok, data } = await api('POST', '/user/checkin');
+  if (!ok) { showToast('⚠️ ' + (data.error||'签到失败')); return; }
+  checkedIn = true;
+  const btn = document.getElementById('ck-btn');
+  if (btn) { btn.textContent = '✓ 已签到'; btn.disabled = true; }
+  document.getElementById('ck-today')?.classList.add('done');
+  document.getElementById('ck-modal').classList.add('show');
+  const sub = document.getElementById('ck-modal-sub');
+  if(sub && data) sub.textContent = `连续签到 ${data.streak} 天，累计积分 ${data.total} 分`;
+  loadHome();
+}
+
+// ── 应用市场（用户端）──
+async function renderMarket() {
+  const grid = document.getElementById('market-grid');
+  if (!grid) return;
+  const { ok, data } = await api('GET', '/apps/market');
+  if (!ok) { grid.innerHTML = '<div class="empty"><p>加载失败</p></div>'; return; }
+  const q = document.getElementById('market-search')?.value.toLowerCase() || '';
+  const list = data.apps.filter(a => !q || a.name.includes(q) || a.description.includes(q));
+  grid.innerHTML = list.map(a => `
+    <div class="app-card">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="app-icon" style="background:${a.icon_bg||'#F0F0F0'}">${a.icon}</div>
+        <div><div class="app-name">${a.name}</div><div class="app-desc">${a.description}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        ${a.userAuthed
+          ? `<span class="badge ok">已授权</span><button class="btn" style="font-size:11px;padding:4px 10px;">管理</button>`
+          : `<span class="badge grey">未授权</span><button class="btn primary" style="font-size:11px;padding:4px 10px;" onclick="userAuthApp('${a.id}')">授权</button>`}
+      </div>
+    </div>`).join('') +
+    `<div class="app-card" style="border-style:dashed;border-color:var(--bd2);justify-content:center;align-items:center;min-height:110px;color:var(--txd);">
+      <div style="text-align:center;"><div style="font-size:24px;margin-bottom:4px;">＋</div><div style="font-size:12px;">申请接入新应用</div></div>
+    </div>`;
+}
+
+async function userAuthApp(id) {
+  const { ok, data } = await api('POST', `/apps/${id}/auth`);
+  if (ok) { renderMarket(); showToast('✓ 授权成功'); }
+  else showToast('⚠️ ' + (data.error||'授权失败'));
+}
+
+// ── 已授权应用 ──
+async function loadAuthedApps() {
+  const { ok, data } = await api('GET', '/apps/authed');
+  const el = document.getElementById('tab-authorized');
+  if (!el) return;
+  if (!ok || !data.apps.length) { el.innerHTML = '<div class="empty"><div class="ei">📭</div><p>暂无已授权应用</p></div>'; return; }
+  el.innerHTML = data.apps.map(a => `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="card-header">
+        <h3>${a.icon} ${a.name}</h3>
+        <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:4px 10px;" onclick="revokeApp('${a.id}')">撤销授权</button>
+      </div>
+      <div class="card-body" style="color:var(--txm);font-size:12px;">Client ID：<code>${a.client_id}</code></div>
+    </div>`).join('');
+}
+
+async function revokeApp(id) {
+  const { ok } = await api('DELETE', `/apps/${id}/auth`);
+  if (ok) { loadAuthedApps(); showToast('✓ 已撤销授权'); }
+}
+
+// ── KYC 实名认证 ──
+async function renderKycCard() {
+  const { ok, data } = await api('GET', '/user/me');
+  if (!ok) return;
+  const u = data.user;
+  kycVerified = !!u.kyc_verified;
+  const badge = document.getElementById('kyc-badge');
+  const body = document.getElementById('kyc-body');
+  if (!badge || !body) return;
+  if (kycVerified) {
+    badge.className = 'badge ok'; badge.textContent = '已认证';
+    body.innerHTML = `
+      <div class="rn-box">
+        <div style="font-size:22px;">🪪</div>
+        <div style="flex:1">
+          <div class="rn-name">${u.kyc_name||'—'}</div>
+          <div class="rn-info">证件尾号 ${u.kyc_id_tail||'—'} · 已完成实名认证</div>
+        </div>
+        <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;" onclick="deleteKyc()">删除实名信息</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);font-size:11px;">
+          <span>🏢</span><span style="font-weight:600;color:var(--txm);">认证服务</span><span>${u.kyc_provider||'—'}</span></div>
+        <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bd);border-radius:2px;background:var(--sf2);font-size:11px;">
+          <span>🕐</span><span style="font-weight:600;color:var(--txm);">认证时间</span><span>${fmtTime(u.kyc_verified_at)}</span></div>
+      </div>
+      <p style="font-size:11px;color:var(--txd);margin-top:10px;">认证后不支持修改，但可删除后重新认证。</p>`;
+  } else {
+    badge.className = 'badge grey'; badge.textContent = '未认证';
+    body.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:4px 0;">
+        <div style="font-size:13px;color:var(--txm);">尚未完成实名认证。认证后可解锁更多功能。</div>
+        <button class="btn primary" onclick="startKyc()">开始实名认证 →</button>
+      </div>`;
+  }
+}
+
+async function deleteKyc() {
+  if (!confirm('确认删除实名信息？删除后需重新认证。')) return;
+  const { ok, data } = await api('DELETE', '/user/kyc');
+  if (ok) { renderKycCard(); showToast('⚠️ 实名信息已删除'); }
+  else showToast('⚠️ ' + (data.error||'删除失败'));
+}
+
+function startKyc() { showToast('→ 跳转实名认证（需配置 KYC_PROVIDER 环境变量）'); }
+
+// ── 管理端：用户管理 ──
+async function loadAdmStats() {
+  const { ok, data } = await api('GET', '/admin/stats');
+  if (!ok) return;
+  const s = data.stats;
+  const cards = document.querySelectorAll('#page-adm-users .stat-card');
+  if (cards[0]) { cards[0].querySelector('.val').textContent = s.total.toLocaleString(); cards[0].querySelector('.sub').textContent = `本月新增 +${s.newThisMonth}`; }
+  if (cards[1]) { cards[1].querySelector('.val').textContent = s.newThisMonth; }
+  if (cards[2]) { cards[2].querySelector('.val').textContent = s.todayActive; }
+  if (cards[3]) { cards[3].querySelector('.val').textContent = s.verified; cards[3].querySelector('.sub').textContent = `占总用户 ${s.total?Math.round(s.verified/s.total*100):0}%`; }
+
+  // 柱状图
+  const bars = document.querySelector('.chart-bars');
+  if (bars && s.daily7) {
+    const max = Math.max(...s.daily7.map(d=>d.n), 1);
+    bars.innerHTML = s.daily7.map(d => `
+      <div class="bar-col">
+        <div class="bar" style="height:${Math.max(8,Math.round(d.n/max*70))}px;"></div>
+        <div class="bar-label">${d.d.slice(5)}</div>
+      </div>`).join('');
+  }
+}
+
+async function loadAdmUsers() {
+  const { ok, data } = await api('GET', '/admin/users');
+  if (!ok) return;
+  const list = document.querySelector('.detail-list');
+  if (!list) return;
+  list.innerHTML = data.users.map((u,i) => `
+    <div class="detail-list-item ${i===0?'active':''}" onclick="selectUserById(this,'${u.id}')">
+      <div class="din">${u.name||u.email||'—'}</div>
+      <div class="did">#${fmtUid(u.uid_seq)} · ${u.status==='active'?'正常':'已停用'}</div>
+    </div>`).join('') || '<div style="padding:12px;color:var(--txd);font-size:12px;">暂无用户</div>';
+  if (data.users.length) loadAdmUserDetail(data.users[0].id);
+}
+
+async function loadAdmUserDetail(uid) {
+  const { ok, data } = await api('GET', `/admin/users/${uid}`);
+  if (!ok) return;
+  renderUserDetailFromData(data.user);
+}
+
+function selectUserById(el, uid) {
+  document.querySelectorAll('.detail-list-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  loadAdmUserDetail(uid);
+}
+
+function renderUserDetailFromData(u) {
+  const panel = document.getElementById('user-detail-panel');
+  if (!panel) return;
+  const statusBadge = u.status==='active' ? '<span class="badge ok">正常</span>' : '<span class="badge err">已停用</span>';
+  const rnHtml = u.kyc_verified
+    ? `<div class="rn-box"><div style="font-size:18px;">🪪</div>
+        <div style="flex:1"><div class="rn-name">${u.kyc_name||'—'}</div><div class="rn-info">尾号 ${u.kyc_id_tail||'—'} · 已实名 via ${u.kyc_provider||'—'}</div></div>
+        <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:3px 8px;" onclick="admDeleteKyc('${u.id}')">删除</button></div>`
+    : `<div style="color:var(--txd);font-size:12px;padding:6px 0;">未完成实名认证</div>
+       <button class="btn" style="font-size:11px;margin-top:4px;" onclick="showToast('→ 发送实名认证链接给用户')">发送认证链接</button>`;
+  panel.innerHTML = `
+    <div class="detail-section"><h4>基本信息</h4>
+      <div class="kv-grid">
+        <div class="kv"><div class="k">姓名</div><div class="v">${u.name||'—'}</div></div>
+        <div class="kv"><div class="k">用户编号</div><div class="v">#${fmtUid(u.uid_seq)}</div></div>
+        <div class="kv"><div class="k">状态</div><div class="v">${statusBadge}</div></div>
+        <div class="kv"><div class="k">积分</div><div class="v">${u.points} pts</div></div>
+        <div class="kv"><div class="k">邮箱</div><div class="v">${u.email||'—'}</div></div>
+        <div class="kv"><div class="k">手机</div><div class="v">${u.phone||'—'}</div></div>
+        <div class="kv"><div class="k">用户等级</div><div class="v">Lv.${u.user_level} ${u.role==='admin'?'[管理员 Lv.'+u.admin_level+']':''}</div></div>
+        <div class="kv"><div class="k">注册时间</div><div class="v">${fmtTime(u.created_at)}</div></div>
+      </div>
+    </div>
+    <div class="detail-section"><h4>实名认证</h4>${rnHtml}</div>
+    <div class="detail-section"><h4>登录方式</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${u.password_hash ? '' : ''}
+        ${(u.oauthBinds||[]).map(o=>`<span class="badge ac">${o.provider}</span>`).join('')}
+        ${u.email ? '<span class="badge ac">邮箱</span>' : ''}
+        ${u.phone ? '<span class="badge ac">手机号</span>' : ''}
+        ${!u.email && !u.phone && !(u.oauthBinds||[]).length ? '<span style="font-size:12px;color:var(--txd);">—</span>' : ''}
+      </div>
+    </div>
+    <div class="detail-section"><h4>授权应用</h4>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${(u.apps||[]).map(a=>`<span class="badge grey">${a.name}</span>`).join('')||'<span style="font-size:12px;color:var(--txd);">暂无</span>'}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn" style="font-size:11px;" onclick="showToast('→ 请使用重置密码接口')">重置密码</button>
+      ${u.status==='active'
+        ? `<button class="btn" style="font-size:11px;color:var(--err);border-color:var(--err);" onclick="admDisableUser('${u.id}')">停用账号</button>`
+        : `<button class="btn primary" style="font-size:11px;" onclick="admEnableUser('${u.id}')">恢复账号</button>`}
+    </div>`;
+}
+
+async function admDisableUser(uid) {
+  const { ok } = await api('POST', `/admin/users/${uid}/disable`);
+  if (ok) { showToast('⚠️ 账号已停用'); loadAdmUsers(); }
+}
+async function admEnableUser(uid) {
+  const { ok } = await api('POST', `/admin/users/${uid}/enable`);
+  if (ok) { showToast('✓ 账号已恢复'); loadAdmUsers(); }
+}
+async function admDeleteKyc(uid) {
+  if (!confirm('确认删除该用户实名信息？')) return;
+  const { ok } = await api('DELETE', `/admin/users/${uid}/kyc`);
+  if (ok) { showToast('⚠️ 实名信息已删除'); loadAdmUsers(); }
+}
+
+function renderUserDetail(idx) {} // 空实现，保留兼容
+
+// ── 管理端：应用管理 ──
+async function renderAdmApps() {
+  const { ok, data } = await api('GET', '/admin/apps');
+  const tbody = document.querySelector('#page-adm-apps tbody');
+  if (!tbody) return;
+  if (!ok || !data.apps.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--txd);padding:20px;">暂无应用</td></tr>'; return; }
+  tbody.innerHTML = data.apps.map(a => `
+    <tr>
+      <td><span style="font-weight:600;">${a.icon} ${a.name}</span></td>
+      <td><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:2px;">${a.client_id}</code></td>
+      <td style="font-size:12px;color:var(--txm);">${a.callback_url}</td>
+      <td>${a.auth_users}</td>
+      <td>
+        ${a.status==='enabled'?'<span class="badge ok">启用</span>':''}
+        ${a.status==='pending'?'<span class="badge warn">待审核</span>':''}
+        ${a.status==='disabled'?'<span class="badge err">已停用</span>':''}
+        ${!a.visible?'<span class="badge grey" style="margin-left:4px;">用户不可见</span>':''}
+      </td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="openAppEdit('${a.id}')">编辑</button>
+        ${a.status==='pending'?`<button class="btn primary" style="font-size:11px;padding:3px 8px;" onclick="admApproveApp('${a.id}')">审核通过</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+async function admApproveApp(id) {
+  const { ok } = await api('POST', `/admin/apps/${id}/approve`);
+  if (ok) { renderAdmApps(); renderMarket(); showToast('✓ 已审核通过并上架'); }
+}
+
+async function saveAppEdit() {
+  const id = editingAppId;
+  const body = {
+    name: document.getElementById('ae-name')?.value.trim(),
+    icon: document.getElementById('ae-icon')?.value.trim(),
+    description: document.getElementById('ae-desc')?.value.trim(),
+    callback_url: document.getElementById('ae-cb')?.value.trim(),
+    visible: document.getElementById('ae-visible')?.value === 'true',
+    status: document.getElementById('ae-status')?.value,
+  };
+  const { ok, data } = await api('PATCH', `/admin/apps/${id}`, body);
+  document.getElementById('bind-modal').classList.remove('show');
+  if (ok) { renderAdmApps(); renderMarket(); showToast('✓ 应用信息已更新'); }
+  else showToast('⚠️ ' + (data.error||'保存失败'));
+}
+
+// openAppEdit 仍需要当前应用数据，从 API 获取
+async function openAppEdit(id) {
+  editingAppId = id;
+  const { ok, data } = await api('GET', '/admin/apps');
+  if (!ok) return;
+  const a = data.apps.find(a => a.id === id);
+  if (!a) return;
+  document.getElementById('bind-modal').innerHTML = `
+    <div class="modal" style="min-width:500px;text-align:left;padding:0;overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">${a.icon}</span>
+        <div style="flex:1;font-size:14px;font-weight:700;">编辑应用：${a.name}</div>
+        <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="document.getElementById('bind-modal').classList.remove('show')">关闭</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:11px;">
+        <div class="settings-grid">
+          <div class="form-row"><label>应用名称</label><input type="text" id="ae-name" value="${a.name}"/></div>
+          <div class="form-row"><label>应用图标（Emoji）</label><input type="text" id="ae-icon" value="${a.icon}" maxlength="2"/></div>
+          <div class="form-row full"><label>应用描述</label><input type="text" id="ae-desc" value="${a.description}"/></div>
+          <div class="form-row full"><label>回调地址</label><input type="text" id="ae-cb" value="${a.callback_url}" style="font-family:monospace;font-size:12px;"/></div>
+          <div class="form-row"><label>用户端可见</label>
+            <select id="ae-visible"><option value="true" ${a.visible?'selected':''}>是</option><option value="false" ${!a.visible?'selected':''}>否</option></select></div>
+          <div class="form-row"><label>状态</label>
+            <select id="ae-status">
+              <option value="enabled" ${a.status==='enabled'?'selected':''}>启用</option>
+              <option value="disabled" ${a.status==='disabled'?'selected':''}>停用</option>
+              <option value="pending" ${a.status==='pending'?'selected':''}>待审核</option>
+            </select></div>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;background:var(--bg);">
+        <button class="btn" onclick="document.getElementById('bind-modal').classList.remove('show')">取消</button>
+        <button class="btn primary" onclick="saveAppEdit()">保存修改</button>
+      </div>
+    </div>`;
+  document.getElementById('bind-modal').classList.add('show');
+}
+
+// ── 管理端：日志 ──
+async function loadAdmLogs() {
+  const { ok, data } = await api('GET', '/admin/logs');
+  const tbody = document.querySelector('#page-adm-logs tbody');
+  if (!tbody) return;
+  if (!ok || !data.logs.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--txd);padding:20px;">暂无日志</td></tr>'; return; }
+  tbody.innerHTML = data.logs.map(l => `<tr>
+    <td>${fmtTime(l.created_at)}</td>
+    <td class="em">${l.user_name||'—'}</td>
+    <td>${l.uid_seq?'#'+fmtUid(l.uid_seq):'—'}</td>
+    <td>${l.method}</td>
+    <td>${l.app_name}</td>
+    <td>${l.ip||'—'}</td>
+    <td style="font-size:11px;color:var(--txm);max-width:120px;overflow:hidden;text-overflow:ellipsis;">${(l.user_agent||'—').slice(0,30)}</td>
+    <td><span class="badge ${l.status==='success'?'ok':l.status==='disabled'?'warn':'err'}">${l.status==='success'?'成功':l.status==='disabled'?'账号停用':'失败'}</span></td>
+  </tr>`).join('');
+}
+
+// ── 管理端：API Keys ──
+async function renderApiPage() {
+  renderApiKeys();
+  renderApiDocs();
+  updateTestExample();
+}
+
+async function renderApiKeys() {
+  const { ok, data } = await api('GET', '/admin/api-keys');
+  const tbody = document.getElementById('api-keys-tbody');
+  if (!tbody) return;
+  if (!ok || !data.keys.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--txd);padding:20px;">暂无 API 密钥</td></tr>'; return; }
+  tbody.innerHTML = data.keys.map(k => {
+    const scopes = JSON.parse(k.scopes||'[]');
+    return `<tr>
+      <td style="font-weight:600;">${k.name}</td>
+      <td><code style="font-size:11px;background:var(--bg);padding:2px 8px;border-radius:2px;">${k.token_prefix}…</code>
+          <button class="btn" style="font-size:10px;padding:2px 7px;margin-left:4px;" onclick="copyText('${k.token_prefix}…（完整密钥仅创建时显示）')">提示</button></td>
+      <td>${scopes.map(s=>`<span class="badge ac" style="font-size:10px;margin-right:3px;">${s}</span>`).join('')}</td>
+      <td style="font-size:12px;color:var(--txm);">${fmtTime(k.last_used_at)||'从未'}</td>
+      <td>${k.status==='active'?'<span class="badge ok">活跃</span>':'<span class="badge err">已撤销</span>'}</td>
+      <td>${k.status==='active'?`<button class="btn" style="font-size:11px;padding:3px 8px;" onclick="revokeKey('${k.id}')">撤销</button>`:'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function revokeKey(id) {
+  if (!confirm('确认撤销该密钥？撤销后立即失效且不可恢复。')) return;
+  const { ok } = await api('DELETE', `/admin/api-keys/${id}`);
+  if (ok) { renderApiKeys(); showToast('⚠️ 密钥已撤销'); }
+}
+
+async function saveApiKey() {
+  const name = document.getElementById('new-key-name')?.value.trim();
+  const checked = [...document.querySelectorAll('#api-modal-body input[type=checkbox]:checked')].map(c=>c.value);
+  if (!name) { showToast('⚠️ 请填写密钥名称'); return; }
+  if (!checked.length) { showToast('⚠️ 请至少选择一项权限'); return; }
+  const { ok, data } = await api('POST', '/admin/api-keys', { name, scopes: checked });
+  if (!ok) { showToast('⚠️ ' + (data.error||'创建失败')); return; }
+  document.getElementById('api-modal-title').textContent = '✓ 密钥已创建';
+  document.getElementById('api-modal-body').innerHTML = `
+    <div style="font-size:13px;color:var(--txm);margin-bottom:8px;">请立即复制并保存，此后不会再完整显示：</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--sf2);border:1px solid var(--ac3);border-radius:2px;">
+      <code style="flex:1;font-size:13px;font-family:monospace;font-weight:700;color:var(--ac);word-break:break-all;">${data.token}</code>
+      <button class="btn primary" style="flex-shrink:0;" onclick="copyText('${data.token}')">复制</button>
+    </div>`;
+  document.getElementById('api-modal-footer').innerHTML = `<button class="btn primary" onclick="closeApiModal();renderApiKeys()">完成</button>`;
+}
+
+// ── 管理端：环境变量 ──
+async function renderEnvPage() {
+  const { ok, data } = await api('GET', '/admin/env');
+  if (!ok) return;
+  // 把数据库中的值同步到 ENV_GROUPS
+  Object.entries(data.env).forEach(([k,v]) => {
+    for (const g of ENV_GROUPS) {
+      const vr = g.vars.find(x=>x.key===k);
+      if (vr) { vr.value = v; break; }
+    }
+  });
+  renderEnvCards();
+}
+
+function renderEnvCards() {
+  const tabsEl = document.getElementById('env-group-tabs');
+  const allDot = (g) => {
+    const total = g.vars.length; const filled = g.vars.filter(v=>v.value.trim()).length;
+    if (filled===0) return {color:'var(--txd)',label:'未配置'};
+    if (filled<total) return {color:'var(--warn)',label:`${filled}/${total}`};
+    return {color:'var(--ok)',label:'已配置'};
+  };
+  const anyConfigured = ENV_GROUPS.some(g=>g.vars.some(v=>v.value.trim()));
+  const allConfigured = ENV_GROUPS.every(g=>g.vars.every(v=>v.value.trim()));
+  const allTabColor = allConfigured?'var(--ok)':anyConfigured?'var(--warn)':'var(--txd)';
+  tabsEl.innerHTML = `<button class="env-gtab ${currentEnvGroup==='all'?'active':''}" onclick="filterEnvGroup('all')"><span class="env-gtab-dot" style="background:${allTabColor}"></span>全部</button>` +
+    ENV_GROUPS.map(g=>{const s=allDot(g);return `<button class="env-gtab ${currentEnvGroup===g.key?'active':''}" onclick="filterEnvGroup('${g.key}')"><span class="env-gtab-dot" style="background:${s.color}"></span>${g.label}</button>`;}).join('');
+  const cardsEl = document.getElementById('env-cards');
+  const groups = currentEnvGroup==='all'?ENV_GROUPS:ENV_GROUPS.filter(g=>g.key===currentEnvGroup);
+  cardsEl.innerHTML = groups.map(g=>{
+    const dot=allDot(g);
+    const rows=g.vars.map(v=>{
+      const filled=v.value.trim().length>0;
+      const isVisible=envSecretVisible[v.key]||false;
+      const inputClass=['env-input',v.secret&&!isVisible?'secret':'',filled?'filled':''].filter(Boolean).join(' ');
+      const displayVal=v.secret&&!isVisible&&filled?'•'.repeat(Math.min(v.value.length,24)):v.value;
+      return `<div class="env-row" id="envrow-${v.key}">
+        <div class="env-key-cell"><div class="env-key">${v.key}</div><div class="env-key-desc">${v.label} · ${v.desc}</div></div>
+        <div class="env-val-cell"><input class="${inputClass}" id="envinput-${v.key}" type="${v.secret&&!isVisible?'password':'text'}" value="${displayVal}" placeholder="${v.placeholder||'请填写…'}" oninput="onEnvInput('${v.key}',this.value)" autocomplete="off" spellcheck="false"/></div>
+        <div class="env-status-cell">${filled?'<span class="badge ok">已配置</span>':'<span class="badge grey">未配置</span>'}</div>
+        <div class="env-action-cell">${v.secret?`<button class="env-eye-btn" onclick="toggleEnvSecret('${v.key}')">${isVisible?'🙈':'👁'}</button>`:'<span></span>'}</div>
+      </div>`;
+    }).join('');
+    return `<div class="env-section" id="envsec-${g.key}">
+      <div class="env-section-header" onclick="toggleEnvSection('${g.key}')">
+        <span class="env-section-icon">${g.icon}</span>
+        <span class="env-section-name">${g.label}</span>
+        <span class="env-section-meta" style="color:${dot.color}">${dot.label} · ${g.vars.length} 个变量 · ${g.desc}</span>
+        <span class="env-section-chevron">▾</span>
+      </div>
+      <div class="env-rows">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+async function saveAllEnv() {
+  const vars = {};
+  ENV_GROUPS.forEach(g => g.vars.forEach(v => { vars[v.key] = v.value; }));
+  const { ok } = await api('POST', '/admin/env', { vars });
+  showToast(ok ? '✓ 环境变量已保存' : '⚠️ 保存失败');
+}
+
+// ── goto 触发真实数据加载 ──
+const _origGoto = goto;
+
+// 初始化
+(async () => {
+  await loadMe();
+  // 根据角色决定初始页面
+  if (ME && ME.role === 'admin') {
+    // 管理员默认进管理端
+  }
+  renderMarket();
+  loadHome();
+})();
+
+// ══════════════════════════════════════════
+// 等级管理数据
+// ══════════════════════════════════════════
+
+// 所有可配置的服务权限
+const ALL_PERMS = [
+  { key:'login',       name:'账号登录',       desc:'使用账号密码/验证码登录系统' },
+  { key:'checkin',     name:'每日签到',       desc:'每日签到获取积分奖励' },
+  { key:'points',      name:'积分使用',       desc:'使用积分兑换服务与权益' },
+  { key:'app_market',  name:'应用市场',       desc:'查看并授权接入第三方应用' },
+  { key:'login_log',   name:'登录日志查询',   desc:'查询自己的历史登录记录' },
+  { key:'bind_oauth',  name:'三方账号绑定',   desc:'绑定微信/飞书/钉钉等第三方账号' },
+  { key:'api_access',  name:'API 接入',       desc:'通过 API Token 访问开放接口' },
+  { key:'realname',    name:'实名认证',       desc:'完成实名信息认证' },
+  { key:'adm_users',   name:'用户管理',       desc:'查看与管理所有用户账号' },
+  { key:'adm_apps',    name:'应用管理',       desc:'管理已接入与待审核应用' },
+  { key:'adm_logs',    name:'全量日志',       desc:'查看全平台登录日志' },
+  { key:'adm_levels',  name:'等级管理',       desc:'配置用户组等级与权限模板' },
+  { key:'sys_config',  name:'系统配置',       desc:'修改系统全局设置与参数' },
+];
+
+// 普通用户 5 个等级（数字越小级别越高）
+const USER_LEVELS = [
+  {
+    num: 1, name: 'VIP 会员', badge: '👑',
+    desc: '最高用户等级，享有全部用户侧服务及优先支持通道。',
+    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname']
+  },
+  {
+    num: 2, name: '高级用户', badge: '⭐',
+    desc: '积累足量积分或完成实名认证后可晋升，解锁 API 接入权限。',
+    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname']
+  },
+  {
+    num: 3, name: '认证用户', badge: '✅',
+    desc: '完成实名认证的标准用户，可绑定三方账号并接入应用市场。',
+    perms: ['login','checkin','points','app_market','login_log','bind_oauth','realname']
+  },
+  {
+    num: 4, name: '普通用户', badge: '👤',
+    desc: '默认注册后所属等级，可使用基础登录与签到服务。',
+    perms: ['login','checkin','points','login_log']
+  },
+  {
+    num: 5, name: '受限用户', badge: '🔒',
+    desc: '因违规或未完成初始设置而受限，仅保留基础登录权限。',
+    perms: ['login']
+  },
+];
+
+// 管理员 3 个等级（数字越小权限越大）
+const ADMIN_LEVELS = [
+  {
+    num: 1, name: '超级管理员', badge: '🛡️',
+    desc: '拥有平台全部权限，包括系统配置、等级管理与所有管理功能。',
+    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname','adm_users','adm_apps','adm_logs','adm_levels','sys_config']
+  },
+  {
+    num: 2, name: '运营管理员', badge: '📋',
+    desc: '负责日常用户与应用管理，可查看全量日志，不可修改系统配置。',
+    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname','adm_users','adm_apps','adm_logs']
+  },
+  {
+    num: 3, name: '只读管理员', badge: '👁️',
+    desc: '仅可查看用户信息与日志，无编辑与审核权限。',
+    perms: ['login','login_log','adm_users','adm_logs']
+  },
+];
+
+let currentLvlGroup = 'user'; // 'user' | 'admin'
+let currentEditLvl = null;    // 当前编辑的等级对象引用
+
+function switchLvlGroup(group) {
+  currentLvlGroup = group;
+  document.querySelectorAll('.lvl-gtab').forEach((b,i) => {
+    b.classList.toggle('active', (group==='user' && i===0) || (group==='admin' && i===1));
+  });
+  const isUser = group === 'user';
+  document.getElementById('lvl-group-label').textContent  = isUser ? '普通用户组' : '管理员组';
+  document.getElementById('lvl-group-sub').textContent    = isUser
+    ? '共 5 个等级，数字越小代表等级越高。各等级可使用的服务范围不同，高等级包含低等级的全部权限。'
+    : '共 3 个等级，数字越小代表权限越大。管理员等级决定其可操作的管理范围。';
+  renderLevelCards();
+}
+
+function renderLevelCards() {
+  const levels = currentLvlGroup === 'user' ? USER_LEVELS : ADMIN_LEVELS;
+  const container = document.getElementById('lvl-cards');
+
+  container.innerHTML = levels.map(lv => {
+    const permTags = ALL_PERMS.map(p => {
+      const on = lv.perms.includes(p.key);
+      return `<span class="lvl-perm-tag ${on?'on':'off'}">${on?'✓':'✗'} ${p.name}</span>`;
+    }).join('');
+
+    // 用户数 mock
+    const mockCounts = {1:12, 2:48, 3:186, 4:1108, 5:23, 99:5};
+    const userCount = mockCounts[lv.num] || Math.floor(Math.random()*100+10);
+
+    return `
+    <div class="lvl-card">
+      <div class="lvl-rank">
+        <div class="lvl-rank-num">Lv.${lv.num}</div>
+        <div class="lvl-rank-txt">等级</div>
+      </div>
+      <div class="lvl-body">
+        <div class="lvl-name-row">
+          <span style="font-size:16px;">${lv.badge}</span>
+          <span class="lvl-name">${lv.name}</span>
+          <span class="badge grey" style="font-size:10px;">${userCount} 名用户</span>
+        </div>
+        <div class="lvl-desc">${lv.desc}</div>
+        <div class="lvl-perms">${permTags}</div>
+      </div>
+      <div class="lvl-actions">
+        <button class="btn" style="font-size:11px;padding:4px 10px;" onclick='openLvlEditModal(${lv.num})'>编辑</button>
+        <button class="btn" style="font-size:11px;padding:4px 10px;color:var(--txd);">查看用户</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openLvlEditModal(num) {
+  const levels = currentLvlGroup === 'user' ? USER_LEVELS : ADMIN_LEVELS;
+  // 若未传 num，编辑第一个作为模板示例
+  const lv = num ? levels.find(l => l.num === num) : levels[0];
+  if (!lv) return;
+  currentEditLvl = lv;
+
+  const groupLabel = currentLvlGroup === 'user' ? '普通用户' : '管理员';
+  document.getElementById('lm-icon').textContent  = lv.badge;
+  document.getElementById('lm-title').textContent = `编辑等级 · ${groupLabel} Lv.${lv.num}`;
+  document.getElementById('lm-sub').textContent   = '修改该等级的名称、描述与可用服务权限';
+  document.getElementById('lm-name').value        = lv.name;
+  document.getElementById('lm-num').value         = `${groupLabel} Lv.${lv.num}`;
+  document.getElementById('lm-desc-input').value  = lv.desc;
+
+  // 渲染权限开关
+  document.getElementById('lm-perms').innerHTML = ALL_PERMS.map(p => {
+    const checked = lv.perms.includes(p.key) ? 'checked' : '';
+    return `
+    <div class="perm-row">
+      <div class="perm-row-info">
+        <div class="perm-row-name">${p.name}</div>
+        <div class="perm-row-desc">${p.desc}</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" data-key="${p.key}" ${checked} onchange="onPermToggle(this,'${p.key}')"/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>`;
+  }).join('');
+
+  document.getElementById('lvl-modal').classList.add('show');
+}
+
+function onPermToggle(el, key) {
+  if (!currentEditLvl) return;
+  if (el.checked) {
+    if (!currentEditLvl.perms.includes(key)) currentEditLvl.perms.push(key);
+  } else {
+    currentEditLvl.perms = currentEditLvl.perms.filter(k => k !== key);
+  }
+}
+
+function saveLvlModal() {
+  if (!currentEditLvl) return;
+  currentEditLvl.name = document.getElementById('lm-name').value.trim() || currentEditLvl.name;
+  currentEditLvl.desc = document.getElementById('lm-desc-input').value.trim() || currentEditLvl.desc;
+  closeLvlModal();
+  renderLevelCards();
+  showToast('✓ 等级配置已保存');
+}
+
+function closeLvlModal() {
+  document.getElementById('lvl-modal').classList.remove('show');
+  currentEditLvl = null;
+}
+
+// ══════════════════════════════════════════
+// 环境变量数据
+// ══════════════════════════════════════════
+const ENV_GROUPS = [
+  {
+    key: 'wechat', label: '微信公众号', icon: '💬', color: '#07C160',
+    desc: '微信网页授权登录（OAuth2.0）',
+    vars: [
+      { key: 'WECHAT_APP_ID',       label: 'AppID',          desc: '微信公众号 AppID，在公众平台「开发 → 基本配置」获取', required: false,  secret: false, placeholder: 'wx1234567890abcdef', value: 'wx8f3b2a1c9d7e0f45' },
+      { key: 'WECHAT_APP_SECRET',   label: 'AppSecret',      desc: '公众号 AppSecret，请妥善保管，切勿泄露',              required: false,  secret: true,  placeholder: '',                  value: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6' },
+      { key: 'WECHAT_REDIRECT_URI', label: '授权回调域',      desc: '需在公众平台「网页授权域名」中添加此域名',            required: false,  secret: false, placeholder: 'https://yourdomain.com/auth/wechat/callback', value: 'https://sso.example.com/auth/wechat/callback' },
+    ]
+  },
+  {
+    key: 'wecom', label: '企业微信', icon: '🏢', color: '#1677FF',
+    desc: '企业微信自建应用扫码登录',
+    vars: [
+      { key: 'WECOM_CORP_ID',      label: 'Corp ID',    desc: '企业微信企业 ID，在管理后台「我的企业」页获取',             required: false,  secret: false, placeholder: 'ww1234567890abcdef', value: 'ww0a1b2c3d4e5f6789' },
+      { key: 'WECOM_AGENT_ID',     label: 'Agent ID',   desc: '自建应用的 AgentId，在「应用管理 → 自建」中获取',          required: false,  secret: false, placeholder: '1000001',           value: '1000042' },
+      { key: 'WECOM_APP_SECRET',   label: 'App Secret', desc: '自建应用的 Secret，每个应用独立，请妥善保管',               required: false,  secret: true,  placeholder: '',                  value: 'zxcvbnm1234567890asdfghjkl' },
+      { key: 'WECOM_REDIRECT_URI', label: '回调地址',    desc: '需在应用「开发者接口 → 网页授权及 JS-SDK」中配置可信域名', required: false,  secret: false, placeholder: 'https://yourdomain.com/auth/wecom/callback', value: 'https://sso.example.com/auth/wecom/callback' },
+    ]
+  },
+  {
+    key: 'feishu', label: '飞书', icon: '📗', color: '#00B96B',
+    desc: '飞书自建应用 OAuth 登录',
+    vars: [
+      { key: 'FEISHU_APP_ID',      label: 'App ID',     desc: '飞书开放平台「应用凭证」中的 App ID',                    required: false,  secret: false, placeholder: 'cli_a1b2c3d4e5f60001', value: '' },
+      { key: 'FEISHU_APP_SECRET',  label: 'App Secret', desc: '飞书开放平台「应用凭证」中的 App Secret',                required: false,  secret: true,  placeholder: '',                    value: '' },
+      { key: 'FEISHU_REDIRECT_URI',label: '重定向地址',  desc: '需在「安全设置 → 重定向 URL」中添加',                   required: false,  secret: false, placeholder: 'https://yourdomain.com/auth/feishu/callback', value: '' },
+    ]
+  },
+  {
+    key: 'dingtalk', label: '钉钉', icon: '📌', color: '#1677FF',
+    desc: '钉钉企业内部应用 OAuth 2.0 登录',
+    vars: [
+      { key: 'DINGTALK_CLIENT_ID',     label: 'Client ID',     desc: '钉钉开放平台应用的 Client ID（即 AppKey）',      required: false,  secret: false, placeholder: 'dingxxxxxxxxxxxxxxxx', value: 'dingpa9bc7e01234567f' },
+      { key: 'DINGTALK_CLIENT_SECRET', label: 'Client Secret', desc: '钉钉开放平台应用的 Client Secret（即 AppSecret）',required: false,  secret: true,  placeholder: '',                    value: 'qwerty123456abcdefgh' },
+      { key: 'DINGTALK_REDIRECT_URI',  label: '回调地址',       desc: '需在应用「登录与分享 → 回调域名」中配置',         required: false,  secret: false, placeholder: 'https://yourdomain.com/auth/dingtalk/callback', value: 'https://sso.example.com/auth/dingtalk/callback' },
+    ]
+  },
+  {
+    key: 'sms_volc', label: '火山引擎短信', icon: '🌋', color: '#FF6B35',
+    desc: '火山引擎 SMS 短信验证码服务',
+    vars: [
+      { key: 'VOLCENGINE_ACCESS_KEY_ID',     label: 'Access Key ID',     desc: '火山引擎控制台「访问控制 → 访问密钥」中获取',   required: false,  secret: false, placeholder: 'AKLTxxxxxxxxxxxxxxxxxxxxxxxx', value: 'AKLTa1b2c3d4e5f6g7h8i9j0' },
+      { key: 'VOLCENGINE_ACCESS_KEY_SECRET', label: 'Access Key Secret', desc: '与 Access Key ID 配对的密钥，仅在创建时显示一次', required: false,  secret: true,  placeholder: '',                             value: 'secretkeyabcdefghij1234567890' },
+      { key: 'VOLCENGINE_SMS_SIGN',          label: '短信签名',           desc: '已审核通过的短信签名名称',                       required: false,  secret: false, placeholder: '【公司名称】',                  value: '【示例平台】' },
+      { key: 'VOLCENGINE_SMS_TEMPLATE_ID',   label: '模板 ID',            desc: '已审核通过的短信验证码模板 ID',                  required: false,  secret: false, placeholder: 'SMS_12345678',                  value: 'SMS_98765432' },
+    ]
+  },
+  {
+    key: 'sms_aliyun', label: '阿里云短信', icon: '☁️', color: '#FF6A00',
+    desc: '阿里云短信服务 SMS',
+    vars: [
+      { key: 'ALIYUN_ACCESS_KEY_ID',     label: 'Access Key ID',     desc: '阿里云 RAM 控制台「用户 → AccessKey 管理」获取', required: false, secret: false, placeholder: 'LTAIxxxxxxxxxxxxxxxx', value: '' },
+      { key: 'ALIYUN_ACCESS_KEY_SECRET', label: 'Access Key Secret', desc: '与 ID 配对的密钥，请妥善保管',                   required: false, secret: true,  placeholder: '',                   value: '' },
+      { key: 'ALIYUN_SMS_SIGN',          label: '短信签名',           desc: '阿里云审核通过的短信签名',                       required: false, secret: false, placeholder: '示例平台',           value: '' },
+      { key: 'ALIYUN_SMS_TEMPLATE',      label: '模板 Code',          desc: '阿里云短信模板 Code',                            required: false, secret: false, placeholder: 'SMS_000000000',      value: '' },
+    ]
+  },
+  {
+    key: 'sms_tencent', label: '腾讯云短信', icon: '🐧', color: '#1677FF',
+    desc: '腾讯云 SMS 短信服务',
+    vars: [
+      { key: 'TENCENT_SMS_SECRET_ID',   label: 'SecretId',    desc: '腾讯云控制台「访问管理 → 访问密钥 → API 密钥管理」获取', required: false, secret: false, placeholder: 'AKIDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', value: '' },
+      { key: 'TENCENT_SMS_SECRET_KEY',  label: 'SecretKey',   desc: '与 SecretId 配对，仅创建时可见，请立即保存',              required: false, secret: true,  placeholder: '',                                    value: '' },
+      { key: 'TENCENT_SMS_APP_ID',      label: 'SdkAppId',    desc: '腾讯云短信控制台「应用管理」中的应用 SDK AppID',         required: false, secret: false, placeholder: '1400000000',                          value: '' },
+      { key: 'TENCENT_SMS_SIGN',        label: '短信签名',     desc: '已审核通过的签名内容（不含【】）',                       required: false, secret: false, placeholder: '示例平台',                            value: '' },
+      { key: 'TENCENT_SMS_TEMPLATE_ID', label: '模板 ID',      desc: '腾讯云短信控制台已审核通过的模板 ID',                   required: false, secret: false, placeholder: '1234567',                             value: '' },
+      { key: 'TENCENT_SMS_REGION',      label: '地域',         desc: '短信服务地域，国内一般填 ap-guangzhou',                 required: false, secret: false, placeholder: 'ap-guangzhou',                        value: '' },
+    ]
+  },
+  {
+    key: 'sms_common', label: '短信公共配置', icon: '⚙️', color: '#888880',
+    desc: '短信服务商选择与通用参数',
+    vars: [
+      { key: 'SMS_PROVIDER',   label: '当前短信服务商', desc: '填写 volcengine / aliyun / tencent，决定实际发送方',  required: false,  secret: false, placeholder: 'volcengine', value: 'volcengine' },
+      { key: 'SMS_CODE_EXPIRE',label: '验证码有效期(秒)',desc: '短信验证码过期秒数，默认 300 秒（5分钟）',            required: false, secret: false, placeholder: '300',         value: '300' },
+    ]
+  },
+  {
+    key: 'kyc_volc', label: 'KYC · 火山引擎', icon: '🌋', color: '#FF6B35',
+    desc: '火山引擎实人认证服务（活体检测 + 身份核验）',
+    vars: [
+      { key: 'VOLC_KYC_ACCESS_KEY_ID',     label: 'Access Key ID',  desc: '可复用短信服务的同一 AK，或单独为实名认证创建子账号 AK', required: false, secret: false, placeholder: 'AKLTxxxxxxxxxxxxxxxxxxxxxxxx', value: '' },
+      { key: 'VOLC_KYC_ACCESS_KEY_SECRET', label: 'Access Key Secret', desc: '与 Access Key ID 配对的密钥',                          required: false, secret: true,  placeholder: '',                           value: '' },
+      { key: 'VOLC_KYC_APP_ID',            label: 'App ID',          desc: '火山引擎实人认证控制台「应用管理」中的 AppID',           required: false, secret: false, placeholder: 'veIdxxxxxxxxxxxxxx',          value: '' },
+      { key: 'VOLC_KYC_MODE',              label: '认证模式',         desc: 'id_card（身份证核验）/ face_liveness（活体+身份证）',    required: false, secret: false, placeholder: 'face_liveness',              value: '' },
+      { key: 'VOLC_KYC_CALLBACK_URL',      label: '结果回调地址',     desc: '认证完成后火山引擎回调的后端地址，用于异步更新认证状态',  required: false, secret: false, placeholder: 'https://yourdomain.com/kyc/volc/callback', value: '' },
+    ]
+  },
+  {
+    key: 'kyc_aliyun', label: 'KYC · 阿里云', icon: '☁️', color: '#FF6A00',
+    desc: '阿里云实人认证（金融级活体人脸核身）',
+    vars: [
+      { key: 'ALIYUN_KYC_ACCESS_KEY_ID',     label: 'Access Key ID',     desc: '可复用短信 AK 或单独创建，建议开通 cloudauth 权限',   required: false, secret: false, placeholder: 'LTAIxxxxxxxxxxxxxxxx', value: '' },
+      { key: 'ALIYUN_KYC_ACCESS_KEY_SECRET', label: 'Access Key Secret', desc: '与 ID 配对的密钥',                                   required: false, secret: true,  placeholder: '',                   value: '' },
+      { key: 'ALIYUN_KYC_SCENE_ID',          label: 'SceneId',           desc: '阿里云实人认证控制台「场景管理」中的场景 ID',         required: false, secret: false, placeholder: '1000000001',         value: '' },
+      { key: 'ALIYUN_KYC_MODE',              label: '认证方式',           desc: 'RPBasic（基础人脸）/ RPInteractive（交互式活体）',    required: false, secret: false, placeholder: 'RPInteractive',      value: '' },
+      { key: 'ALIYUN_KYC_CALLBACK_URL',      label: '结果回调地址',       desc: '人脸核身完成后阿里云回调的后端接口地址',              required: false, secret: false, placeholder: 'https://yourdomain.com/kyc/aliyun/callback', value: '' },
+    ]
+  },
+  {
+    key: 'kyc_tencent', label: 'KYC · 腾讯云', icon: '🐧', color: '#1677FF',
+    desc: '腾讯云慧眼人脸核身（实名认证）',
+    vars: [
+      { key: 'TENCENT_KYC_SECRET_ID',    label: 'SecretId',      desc: '可复用短信服务的 SecretId，或单独创建，需开通慧眼权限',  required: false, secret: false, placeholder: 'AKIDxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', value: '' },
+      { key: 'TENCENT_KYC_SECRET_KEY',   label: 'SecretKey',     desc: '与 SecretId 配对的密钥',                                required: false, secret: true,  placeholder: '',                                    value: '' },
+      { key: 'TENCENT_KYC_REGION',       label: '地域',           desc: '慧眼服务地域，如 ap-guangzhou / ap-beijing',            required: false, secret: false, placeholder: 'ap-guangzhou',                        value: '' },
+      { key: 'TENCENT_KYC_RULE_ID',      label: 'RuleId',        desc: '腾讯云慧眼控制台配置的业务流程 RuleId',                 required: false, secret: false, placeholder: '12345',                               value: '' },
+      { key: 'TENCENT_KYC_CALLBACK_URL', label: '结果回调地址',   desc: '核身完成后腾讯云回调的后端地址',                        required: false, secret: false, placeholder: 'https://yourdomain.com/kyc/tencent/callback', value: '' },
+    ]
+  },
+  {
+    key: 'kyc_common', label: 'KYC 公共配置', icon: '🪪', color: '#7A5AF8',
+    desc: '实名认证服务商选择与通用参数',
+    vars: [
+      { key: 'KYC_PROVIDER',     label: '当前 KYC 服务商', desc: '填写 volcengine / aliyun / tencent，决定调用哪家实名接口', required: false, secret: false, placeholder: 'aliyun',  value: '' },
+      { key: 'KYC_ENABLED',      label: '是否启用实名认证', desc: 'true 启用 / false 关闭（关闭后用户端不显示实名入口）',      required: false, secret: false, placeholder: 'true',    value: 'true' },
+      { key: 'KYC_ALLOW_DELETE', label: '允许用户删除实名', desc: 'true 则用户可自助删除实名信息后重新认证，false 则禁止',     required: false, secret: false, placeholder: 'true',    value: 'true' },
+    ]
+  },
+  {
+    key: 'smtp', label: '邮件 SMTP', icon: '📧', color: '#4A90D9',
+    desc: '邮箱验证码与系统通知邮件发送',
+    vars: [
+      { key: 'SMTP_HOST',   label: 'SMTP 主机', desc: '邮件服务器地址，如 smtp.qq.com、smtp.163.com', required: false,  secret: false, placeholder: 'smtp.qq.com',   value: 'smtp.qq.com' },
+      { key: 'SMTP_PORT',   label: '端口',       desc: 'SSL 通常为 465，TLS 通常为 587',               required: false,  secret: false, placeholder: '465',           value: '465' },
+      { key: 'SMTP_SECURE', label: 'SSL/TLS',   desc: '是否启用 SSL，填 true 或 false',               required: false,  secret: false, placeholder: 'true',          value: 'true' },
+      { key: 'SMTP_USER',   label: '发件人账号', desc: '登录 SMTP 服务器的邮箱账号',                   required: false,  secret: false, placeholder: 'noreply@example.com', value: 'noreply@sso-demo.com' },
+      { key: 'SMTP_PASS',   label: '授权码/密码',desc: 'QQ/163 邮箱使用授权码而非登录密码',            required: false,  secret: true,  placeholder: '',              value: 'smtp_auth_token_demo' },
+      { key: 'SMTP_FROM',   label: '发件人名称', desc: '邮件显示的发件人，格式：名称 <邮箱>',           required: false, secret: false, placeholder: '"统一账号服务" <noreply@example.com>', value: '"统一账号服务" <noreply@sso-demo.com>' },
+    ]
+  },
+  {
+    key: 'jwt', label: 'JWT / 安全', icon: '🔐', color: '#7A5AF8',
+    desc: 'Token 签发与会话安全配置',
+    vars: [
+      { key: 'JWT_SECRET',        label: 'JWT 密钥',         desc: '用于签发 Token 的随机密钥，建议 64 位以上随机字符串', required: false,  secret: true,  placeholder: '',  value: 'super_secret_jwt_key_64chars_placeholder_only' },
+      { key: 'JWT_EXPIRES_IN',    label: 'Token 有效期',      desc: '如 7d、24h、3600（秒）',                             required: false,  secret: false, placeholder: '7d', value: '7d' },
+      { key: 'SESSION_SECRET',    label: 'Session 密钥',      desc: '用于加密 Session 的随机字符串',                      required: false,  secret: true,  placeholder: '',   value: 'session_secret_key_placeholder' },
+      { key: 'SMS_CODE_EXPIRE',   label: '短信码有效期(秒)',   desc: '短信验证码的过期秒数，默认 300 秒',                  required: false, secret: false, placeholder: '300', value: '300' },
+      { key: 'EMAIL_CODE_EXPIRE', label: '邮箱码有效期(秒)',   desc: '邮箱验证码的过期秒数，默认 600 秒',                  required: false, secret: false, placeholder: '600', value: '600' },
+    ]
+  },
+  {
+    key: 'server', label: '服务器基础', icon: '🖥️', color: '#555548',
+    desc: '服务进程、端口与运行环境配置',
+    vars: [
+      { key: 'PORT',         label: '监听端口',  desc: 'Express 服务监听的端口号',            required: false, secret: false, placeholder: '3000',                   value: '3000' },
+      { key: 'BASE_URL',     label: '服务根地址',desc: '对外访问的完整根地址（含协议和端口）', required: false,  secret: false, placeholder: 'https://sso.example.com', value: 'https://sso.example.com' },
+      { key: 'NODE_ENV',     label: '运行环境',  desc: 'development / production，影响验证码是否真实发送', required: false, secret: false, placeholder: 'production', value: 'production' },
+      { key: 'CORS_ORIGIN',  label: 'CORS 域名', desc: '允许跨域的前端域名，多个用逗号分隔，* 表示全部允许', required: false, secret: false, placeholder: 'https://app.example.com', value: '*' },
+    ]
+  },
+];
+
+let currentEnvGroup = 'all';
+const envSecretVisible = {}; // key → bool
+
+function renderEnvPage() {
+  // 渲染分组标签
+  const tabsEl = document.getElementById('env-group-tabs');
+  const allDot = (g) => {
+    const total = g.vars.length;
+    const filled = g.vars.filter(v => v.value.trim()).length;
+    if (filled === 0)     return { color: 'var(--txd)',  label: '未配置' };
+    if (filled < total)   return { color: 'var(--warn)', label: `${filled}/${total}` };
+    return               { color: 'var(--ok)',  label: '已配置' };
+  };
+
+  const allConfigured = ENV_GROUPS.every(g => g.vars.every(v => v.value.trim()));
+  const anyConfigured = ENV_GROUPS.some(g => g.vars.some(v => v.value.trim()));
+  const allTabColor = allConfigured ? 'var(--ok)' : anyConfigured ? 'var(--warn)' : 'var(--txd)';
+  tabsEl.innerHTML = `
+    <button class="env-gtab ${currentEnvGroup==='all'?'active':''}" onclick="filterEnvGroup('all')">
+      <span class="env-gtab-dot" style="background:${allTabColor}"></span>全部
+    </button>` +
+    ENV_GROUPS.map(g => {
+      const s = allDot(g);
+      return `<button class="env-gtab ${currentEnvGroup===g.key?'active':''}" onclick="filterEnvGroup('${g.key}')">
+        <span class="env-gtab-dot" style="background:${s.color}"></span>${g.label}
+      </button>`;
+    }).join('');
+
+  // 渲染变量卡片
+  const cardsEl = document.getElementById('env-cards');
+  const groups = currentEnvGroup === 'all' ? ENV_GROUPS : ENV_GROUPS.filter(g=>g.key===currentEnvGroup);
+
+  cardsEl.innerHTML = groups.map(g => {
+    const dot = allDot(g);
+    const rows = g.vars.map(v => {
+      const filled = v.value.trim().length > 0;
+      const emptyReq = v.required && !filled;
+      const isVisible = envSecretVisible[v.key] || false;
+      const inputClass = ['env-input', v.secret&&!isVisible?'secret':'', filled?'filled':''].filter(Boolean).join(' ');
+      const displayVal = v.secret && !isVisible && filled ? '•'.repeat(Math.min(v.value.length,24)) : v.value;
+      return `
+      <div class="env-row" id="envrow-${v.key}">
+        <div class="env-key-cell">
+          <div class="env-key">${v.key}${v.required?'<span class="env-key-req">*</span>':''}</div>
+          <div class="env-key-desc">${v.label}${v.desc ? ' · '+v.desc : ''}</div>
+        </div>
+        <div class="env-val-cell">
+          <input class="${inputClass}" id="envinput-${v.key}"
+            type="${v.secret&&!isVisible?'password':'text'}"
+            value="${displayVal}"
+            placeholder="${v.placeholder||'请填写…'}"
+            oninput="onEnvInput('${v.key}',this.value)"
+            autocomplete="off" spellcheck="false"/>
+        </div>
+        <div class="env-status-cell">
+          ${filled
+            ? '<span class="badge ok">已配置</span>'
+            : '<span class="badge grey">未配置</span>'
+          }
+        </div>
+        <div class="env-action-cell">
+          ${v.secret
+            ? `<button class="env-eye-btn" title="${isVisible?'隐藏':'显示'}" onclick="toggleEnvSecret('${v.key}')">${isVisible?'🙈':'👁'}</button>`
+            : '<span></span>'
+          }
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="env-section" id="envsec-${g.key}">
+      <div class="env-section-header" onclick="toggleEnvSection('${g.key}')">
+        <span class="env-section-icon">${g.icon}</span>
+        <span class="env-section-name">${g.label}</span>
+        <span class="env-section-meta" style="color:${dot.color}">${dot.label} · ${g.vars.length} 个变量 · ${g.desc}</span>
+        <span class="env-section-chevron">▾</span>
+      </div>
+      <div class="env-rows">${rows}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterEnvGroup(key) {
+  currentEnvGroup = key;
+  renderEnvPage();
+}
+
+function toggleEnvSection(key) {
+  document.getElementById('envsec-'+key).classList.toggle('collapsed');
+}
+
+function toggleEnvSecret(key) {
+  envSecretVisible[key] = !envSecretVisible[key];
+  // 找到该变量数据并重渲染
+  renderEnvPage();
+}
+
+function onEnvInput(key, val) {
+  for(const g of ENV_GROUPS) {
+    const v = g.vars.find(v=>v.key===key);
+    if(v) { v.value = val; break; }
+  }
+    // 实时更新状态徽章和输入框样式
+    const input = document.getElementById('envinput-'+key);
+    if(input) {
+      input.classList.toggle('filled', val.trim().length > 0);
+      input.classList.remove('empty-required');
+      const row = document.getElementById('envrow-'+key);
+      if(row) {
+        const statusCell = row.querySelector('.env-status-cell');
+        if(statusCell) {
+          statusCell.innerHTML = val.trim()
+            ? '<span class="badge ok">已配置</span>'
+            : '<span class="badge grey">未配置</span>';
+        }
+      }
+    }
+}
+
+function saveAllEnv() {
+  showToast('✓ 环境变量已保存，未填写的接口功能将不生效');
+}
+
+function exportEnv() {
+  const lines = ENV_GROUPS.flatMap(g => [
+    `\n# ── ${g.label} ── ${g.desc}`,
+    ...g.vars.map(v => `${v.key}=${v.value||''}`)
+  ]);
+  const blob = new Blob([lines.join('\n').trim()], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '.env';
+  a.click();
+  showToast('✓ .env 文件已导出');
+}
+
+// 点 mask 关闭弹窗
+document.querySelectorAll('.modal-mask').forEach(m => {
+  m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show'); });
+});
+</script>
+</body>
+</html>
