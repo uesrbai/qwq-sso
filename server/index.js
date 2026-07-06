@@ -129,7 +129,7 @@ function buildFooterHtml() {
   // 版本信息点击跳转 GitHub（不可修改）
   const versionLink = `<a href="https://github.com/uesrbai/qwq-sso" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;opacity:.7;">Powered by QWQ SSO v3.0.0</a>`;
 
-  return `<footer style="text-align:center;padding:14px 20px 12px;font-size:11px;color:rgba(0,0,0,.38);border-top:1px solid rgba(0,0,0,.07);background:rgba(0,0,0,.015);line-height:1.9;user-select:none;">
+  return `<footer style="text-align:center;padding:16px 20px 14px;font-size:11px;color:rgba(0,0,0,.38);border-top:1px solid rgba(0,0,0,.07);background:rgba(0,0,0,.02);line-height:1.9;user-select:none;width:100%;margin-top:auto;">
   <div style="font-weight:500;">${copyright}</div>${infoLine}
   <div style="font-size:10px;opacity:.55;margin-top:3px;">Licensed under MIT License &nbsp;·&nbsp; ${versionLink}</div>
 </footer>`;

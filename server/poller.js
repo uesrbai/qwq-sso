@@ -36,6 +36,13 @@ function recordCall(provider, success) {
       last_used  = datetime('now'),
       updated_at = datetime('now')
   `).run(provider, success ? 0 : 1, success ? 0 : 1);
+
+  // 同步写入出站调用日志（本系统调用外部）
+  try {
+    const { randomUUID } = require('crypto');
+    db.prepare("INSERT INTO api_call_logs (id,direction,method,path,provider,status,success,duration_ms,ip) VALUES (?,?,?,?,?,?,?,?,?)")
+      .run(randomUUID(), 'outbound', 'POST', null, provider, success ? 200 : 500, success ? 1 : 0, null, null);
+  } catch (_) {} // api_call_logs 表可能尚未创建（首次启动），忽略
 }
 
 /**

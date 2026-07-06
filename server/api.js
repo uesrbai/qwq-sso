@@ -261,6 +261,80 @@ router.get('/auth/kyc/callback', (req, res) => {
   const success = status === 'Approved' || status === 'verified';
   res.redirect(`/dashboard.html?kyc_result=${success ? 'success' : 'pending'}&user_id=${user_id}`);
 });
+// ── 等级管理（持久化）──
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS user_levels (
+    id       TEXT PRIMARY KEY,
+    grp      TEXT NOT NULL DEFAULT 'user',
+    num      INTEGER NOT NULL,
+    name     TEXT NOT NULL,
+    badge    TEXT NOT NULL DEFAULT '👤',
+    descr    TEXT NOT NULL DEFAULT '',
+    perms    TEXT NOT NULL DEFAULT '[]',
+    UNIQUE(grp, num)
+  )`);
+  const cnt = db.prepare('SELECT COUNT(*) n FROM user_levels').get().n;
+  if (cnt === 0) {
+    const defaults = [
+      ['user',1,'VIP 会员','👑','最高用户等级，享有全部用户侧服务及优先支持通道。','["login","checkin","points","app_market","login_log","bind_oauth","api_access","realname"]'],
+      ['user',2,'高级用户','⭐','积累足量积分或完成实名认证后可晋升，解锁 API 接入权限。','["login","checkin","points","app_market","login_log","bind_oauth","api_access","realname"]'],
+      ['user',3,'认证用户','✅','完成实名认证的标准用户，可绑定三方账号并接入应用市场。','["login","checkin","points","app_market","login_log","bind_oauth","realname"]'],
+      ['user',4,'普通用户','👤','默认注册后所属等级，可使用基础登录与签到服务。','["login","checkin","points","login_log"]'],
+      ['user',5,'受限用户','🔒','因违规或未完成初始设置而受限，仅保留基础登录权限。','["login"]'],
+      ['admin',1,'超级管理员','🛡️','拥有平台全部权限，包括系统配置、等级管理与所有管理功能。','["login","checkin","points","app_market","login_log","bind_oauth","api_access","realname","adm_users","adm_apps","adm_logs","adm_levels","sys_config"]'],
+      ['admin',2,'运营管理员','📋','负责日常用户与应用管理，可查看全量日志，不可修改系统配置。','["login","checkin","points","app_market","login_log","bind_oauth","api_access","realname","adm_users","adm_apps","adm_logs"]'],
+      ['admin',3,'只读管理员','👁️','仅可查看用户信息与日志，无编辑与审核权限。','["login","login_log","adm_users","adm_logs"]'],
+    ];
+    const ins = db.prepare('INSERT INTO user_levels (id,grp,num,name,badge,descr,perms) VALUES (?,?,?,?,?,?,?)');
+    defaults.forEach(d => ins.run(uuidv4(), ...d));
+  }
+} catch(_) {}
+
+router.get('/admin/levels', requireAdmin(1), (req, res) => {
+  const rows = db.prepare('SELECT * FROM user_levels ORDER BY grp, num').all();
+  const withCounts = rows.map(l => {
+    const n = l.grp === 'admin'
+      ? db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin' AND admin_level=?").get(l.num).n
+      : db.prepare("SELECT COUNT(*) n FROM users WHERE role!='admin' AND user_level=?").get(l.num).n;
+    return { ...l, user_count: n, level_tag: (l.grp === 'admin' ? 'A' : 'U') + l.num };
+  });
+  res.json({ success: true, levels: withCounts });
+});
+
+router.post('/admin/levels', requireAdmin(1), (req, res) => {
+  const { grp, num, name, badge, descr, perms } = req.body;
+  if (!['user','admin'].includes(grp)) return res.status(400).json({ error: '组别无效' });
+  const n = parseInt(num);
+  if (isNaN(n) || n < 1 || n > 9) return res.status(400).json({ error: '等级数字必须为 1-9 的一位数字' });
+  if (!name?.trim()) return res.status(400).json({ error: '等级名称必填' });
+  const exists = db.prepare('SELECT 1 FROM user_levels WHERE grp=? AND num=?').get(grp, n);
+  if (exists) return res.status(400).json({ error: `${grp === 'admin' ? 'A' : 'U'}${n} 等级已存在` });
+  db.prepare('INSERT INTO user_levels (id,grp,num,name,badge,descr,perms) VALUES (?,?,?,?,?,?,?)')
+    .run(uuidv4(), grp, n, name.trim(), badge || '👤', descr || '', JSON.stringify(perms || []));
+  res.json({ success: true });
+});
+
+router.patch('/admin/levels/:id', requireAdmin(1), (req, res) => {
+  const { name, badge, descr, perms } = req.body;
+  const lv = db.prepare('SELECT * FROM user_levels WHERE id=?').get(req.params.id);
+  if (!lv) return res.status(404).json({ error: '等级不存在' });
+  db.prepare('UPDATE user_levels SET name=?,badge=?,descr=?,perms=? WHERE id=?')
+    .run(name?.trim() || lv.name, badge || lv.badge, descr ?? lv.descr,
+         perms ? JSON.stringify(perms) : lv.perms, lv.id);
+  res.json({ success: true });
+});
+
+router.delete('/admin/levels/:id', requireAdmin(1), (req, res) => {
+  const lv = db.prepare('SELECT * FROM user_levels WHERE id=?').get(req.params.id);
+  if (!lv) return res.status(404).json({ error: '等级不存在' });
+  const n = lv.grp === 'admin'
+    ? db.prepare("SELECT COUNT(*) n FROM users WHERE role='admin' AND admin_level=?").get(lv.num).n
+    : db.prepare("SELECT COUNT(*) n FROM users WHERE role!='admin' AND user_level=?").get(lv.num).n;
+  if (n > 0) return res.status(400).json({ error: `该等级下还有 ${n} 名用户，请先迁移后再删除` });
+  db.prepare('DELETE FROM user_levels WHERE id=?').run(lv.id);
+  res.json({ success: true });
+});
+
 const { getAllStats, resetStats } = require('./poller');
 
 router.get('/admin/provider-stats', requireAdmin(2), (req, res) => {
@@ -687,7 +761,28 @@ router.post('/admin/env', requireAdmin(1), (req, res) => {
 });
 
 // ── 开放 API（第三方 API Key 调用）──
+// ── 沙盒 mock 数据（测试密钥调用返回，不暴露真实数据）──
+const SANDBOX = {
+  user: (uid) => ({
+    id: 'sandbox-user-id', uid_seq: parseInt(uid) || 142, name: '沙盒测试用户',
+    email: 'sandbox@example.com', phone: '138****0000', role: 'user',
+    user_level: 3, level_tag: 'U3', points: 1000, status: 'active',
+    kyc_verified: 0, created_at: '2026-01-01 00:00:00', _sandbox: true,
+  }),
+  users: () => ({ total: 3, page: 1, _sandbox: true, data: [
+    { id:'sb-1', uid_seq:1, name:'沙盒用户A', role:'user',  user_level:3, level_tag:'U3', status:'active', _sandbox:true },
+    { id:'sb-2', uid_seq:2, name:'沙盒用户B', role:'user',  user_level:5, level_tag:'U5', status:'active', _sandbox:true },
+    { id:'sb-3', uid_seq:3, name:'沙盒管理员', role:'admin', admin_level:1, level_tag:'A1', status:'active', _sandbox:true },
+  ]}),
+  apps: () => ({ total: 1, _sandbox: true, data: [{ id:'sb-app', name:'沙盒应用', status:'enabled', _sandbox:true }] }),
+  logs: () => ({ total: 2, _sandbox: true, data: [
+    { id:'sb-log1', user_name:'沙盒用户A', method:'邮箱密码', status:'success', created_at:'2026-01-01 10:00:00' },
+    { id:'sb-log2', user_name:'沙盒用户B', method:'微信扫码', status:'success', created_at:'2026-01-01 11:00:00' },
+  ]}),
+};
+
 router.get('/v1/auth/verify', requireApiKey('auth:verify'), (req, res) => {
+  if (req.isSandbox) return res.json({ valid: true, user: SANDBOX.user('142'), _sandbox: true });
   const token = req.headers['x-user-token'];
   if (!token) return res.status(400).json({ error: 'x-user-token 请求头缺失' });
   const { verifyToken } = require('./auth');
@@ -695,45 +790,71 @@ router.get('/v1/auth/verify', requireApiKey('auth:verify'), (req, res) => {
   if (!valid) return res.status(401).json({ valid: false });
   const user = users.findById.get(data.uid);
   if (!user) return res.status(401).json({ valid: false });
-  res.json({ valid: true, user: safeUser(user) });
+  res.json({ valid: true, user: levelTagUser(user) });
 });
 router.get('/v1/users', requireApiKey('users:read'), (req, res) => {
-  const { status, page=1, limit=20 } = req.query;
+  if (req.isSandbox) return res.json(SANDBOX.users());
+  const { status, page=1, limit=20, level_tag } = req.query;
   const lim = Math.min(parseInt(limit),100); const off = (parseInt(page)-1)*lim;
-  const rows = status
+  let rows = status
     ? db.prepare('SELECT * FROM users WHERE status=? LIMIT ? OFFSET ?').all(status,lim,off)
     : db.prepare('SELECT * FROM users LIMIT ? OFFSET ?').all(lim,off);
-  res.json({ total: users.countAll.get().n, page: parseInt(page), data: rows.map(safeUser) });
+  // 按等级标识符过滤（U3=普通用户3级 / A1=管理员1级）
+  if (level_tag) {
+    const m = String(level_tag).toUpperCase().match(/^([UA])(\d)$/);
+    if (m) {
+      const [, t, lv] = m;
+      rows = rows.filter(u => t === 'A'
+        ? (u.role === 'admin' && u.admin_level === parseInt(lv))
+        : (u.role !== 'admin' && u.user_level === parseInt(lv)));
+    }
+  }
+  res.json({ total: users.countAll.get().n, page: parseInt(page), data: rows.map(levelTagUser) });
 });
 router.get('/v1/users/:uid', requireApiKey('users:read'), (req, res) => {
+  if (req.isSandbox) return res.json(SANDBOX.user(req.params.uid));
   const user = db.prepare('SELECT * FROM users WHERE uid_seq=? OR id=?').get(req.params.uid, req.params.uid);
   if (!user) return res.status(404).json({ error: '用户不存在' });
-  res.json(safeUser(user));
+  res.json(levelTagUser(user));
 });
 router.post('/v1/users/:uid/disable', requireApiKey('users:write'), (req, res) => {
+  if (req.isSandbox) return res.json({ success: true, _sandbox: true });
   db.prepare("UPDATE users SET status='disabled' WHERE uid_seq=? OR id=?").run(req.params.uid,req.params.uid);
   res.json({ success: true });
 });
 router.post('/v1/users/:uid/enable', requireApiKey('users:write'), (req, res) => {
+  if (req.isSandbox) return res.json({ success: true, _sandbox: true });
   db.prepare("UPDATE users SET status='active' WHERE uid_seq=? OR id=?").run(req.params.uid,req.params.uid);
   res.json({ success: true });
 });
 router.delete('/v1/users/:uid/realname', requireApiKey('users:kyc'), (req, res) => {
+  if (req.isSandbox) return res.json({ success: true, _sandbox: true });
   db.prepare("UPDATE users SET kyc_verified=0,kyc_name=NULL,kyc_id_tail=NULL WHERE uid_seq=? OR id=?").run(req.params.uid,req.params.uid);
   res.json({ success: true });
 });
 router.get('/v1/apps', requireApiKey('apps:read'), (req, res) => {
+  if (req.isSandbox) return res.json(SANDBOX.apps());
   res.json({ total: apps.findAll.all().length, data: apps.findAll.all() });
 });
 router.post('/v1/sms/send', requireApiKey('sms:send'), async (req, res) => {
+  if (req.isSandbox) return res.json({ success: true, msgId: 'sandbox_sms_' + Date.now(), _sandbox: true });
   const { phone } = req.body;
   if (!phone || !isPhone(phone)) return res.status(400).json({ error: '手机号格式不正确' });
   try { const code = genCode(); await sendSmsCode(phone, code); res.json({ success: true, msgId: 'sms_'+Date.now() }); }
   catch (e) { res.status(500).json({ error: '短信发送失败' }); }
 });
 router.get('/v1/logs', requireApiKey('logs:read'), (req, res) => {
+  if (req.isSandbox) return res.json(SANDBOX.logs());
   const rows = logs.findAll.all(); res.json({ total: rows.length, data: rows });
 });
+
+// 用户对象加等级标识符（U3 / A1）
+function levelTagUser(u) {
+  const s = safeUser(u);
+  if (!s) return s;
+  s.level_tag = u.role === 'admin' ? `A${u.admin_level || 9}` : `U${u.user_level || 9}`;
+  return s;
+}
 
 // ──────────────────────────────────────────
 // 积分商城 - 建表

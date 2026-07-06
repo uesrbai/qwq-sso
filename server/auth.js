@@ -60,10 +60,10 @@ function requireApiKey(scope) {
     }
     const token = auth.slice(7);
 
-    // 测试密钥头 sk_test_ / 实际密钥头 sk_live_
     if (!token.startsWith('sk_live_') && !token.startsWith('sk_test_')) {
       return res.status(401).json({ error: 'API Key 格式无效' });
     }
+    const isTestKey = token.startsWith('sk_test_');
 
     const crypto = require('crypto');
     const hash = crypto.createHash('sha256').update(token).digest('hex');
@@ -71,16 +71,26 @@ function requireApiKey(scope) {
     const key = apiKeys.findByHash.get(hash, 'active');
     if (!key) return res.status(401).json({ error: 'API Key 无效或已撤销' });
 
-    // 可信 IP 检查
-    if (key.trusted_ips) {
+    // 可信 IP 检查：
+    // - 实际密钥：必须配置可信 IP 且在范围内
+    // - 测试密钥：默认不校验 IP；仅当用户主动配置了具体 IP（非 * 非空）才校验
+    const clientIp = req.ip?.replace('::ffff:', '') || '';
+    if (!isTestKey) {
+      if (!key.trusted_ips || key.trusted_ips === '*') {
+        return res.status(403).json({ error: '该 API Key 未配置可信 IP，无法调用' });
+      }
       const allowedIps = key.trusted_ips.split(',').map(s => s.trim()).filter(Boolean);
-      const clientIp = req.ip?.replace('::ffff:', '') || '';
-      if (allowedIps.length > 0 && !allowedIps.includes(clientIp)) {
+      if (!allowedIps.includes(clientIp)) {
         return res.status(403).json({ error: `IP ${clientIp} 不在可信范围内` });
       }
     } else {
-      // 未配置可信 IP 则拒绝调用
-      return res.status(403).json({ error: '该 API Key 未配置可信 IP，无法调用' });
+      // 测试密钥：仅当明确配置了 IP 列表才校验
+      if (key.trusted_ips && key.trusted_ips !== '*' && key.trusted_ips.trim()) {
+        const allowedIps = key.trusted_ips.split(',').map(s => s.trim()).filter(Boolean);
+        if (allowedIps.length && !allowedIps.includes(clientIp)) {
+          return res.status(403).json({ error: `IP ${clientIp} 不在测试密钥指定范围内` });
+        }
+      }
     }
 
     const scopes = JSON.parse(key.scopes || '[]');
@@ -89,6 +99,7 @@ function requireApiKey(scope) {
     }
     apiKeys.touch.run(key.id);
     req.apiKey = key;
+    req.isSandbox = isTestKey; // 沙盒标记：测试密钥不返回真实数据
     next();
   };
 }

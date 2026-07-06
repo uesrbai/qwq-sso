@@ -1156,7 +1156,7 @@ async function loadMe() {
             <div style="font-size:13px;font-weight:700;" id="lvl-group-label">普通用户组</div>
             <div style="font-size:12px;color:var(--txm);margin-top:2px;" id="lvl-group-sub">共 5 个等级，数字越小代表等级越高。各等级可使用的服务范围不同，高等级包含低等级的全部权限。</div>
           </div>
-          <button class="btn primary" style="font-size:12px;" onclick="openLvlEditModal()">+ 编辑权限模板</button>
+          <button class="btn primary" style="font-size:12px;" onclick="openLvlEditModal(null)">+ 新增等级</button>
         </div>
 
         <!-- 等级卡片列表 -->
@@ -1683,6 +1683,9 @@ async function loadMe() {
         </div>
 
         <!-- 分组标签 -->
+        <div class="env-group-tabs" id="env-category-tabs" style="margin-bottom:8px;border-bottom:1px solid var(--bd);padding-bottom:10px;">
+          <!-- 一级分类，JS 渲染 -->
+        </div>
         <div class="env-group-tabs" id="env-group-tabs">
           <!-- JS 渲染 -->
         </div>
@@ -1842,8 +1845,6 @@ async function loadMe() {
 <div class="toast" id="toast"></div>
 
 
-      <!-- 页脚（服务端注入）-->
-      <div id="site-footer-placeholder">__FOOTER_HTML__</div>
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /app -->
@@ -2007,7 +2008,7 @@ function goto(page) {
   if(page === 'adm-apps')  { renderAdmApps(); }
   if(page === 'adm-api-logs') { loadAdmApiLogs(); }
   if(page === 'adm-env')   { renderEnvPage(); loadEnvPollStrategy(); loadFooterItems(); }
-  if(page === 'adm-levels') switchLvlGroup(currentLvlGroup);
+  if(page === 'adm-levels') loadLevels();
   if(page === 'adm-env') renderEnvPage();
   if(page === 'adm-api') renderApiPage();
   if(page === 'adm-apps') renderAdmApps();
@@ -3093,7 +3094,35 @@ async function renderEnvPage() {
   renderEnvCards();
 }
 
+const ENV_CATEGORIES = [
+  { key: 'all',    label: '全部',       icon: '📋' },
+  { key: 'oauth',  label: '三方登录',   icon: '🔑' },
+  { key: 'msg',    label: '消息通知',   icon: '📨' },
+  { key: 'kyc',    label: '实名认证',   icon: '🪪' },
+  { key: 'pay',    label: '支付',       icon: '💳' },
+  { key: 'system', label: '系统与页脚', icon: '⚙️' },
+];
+let currentEnvCategory = 'all';
+
+function filterEnvCategory(cat) {
+  currentEnvCategory = cat;
+  currentEnvGroup = 'all';
+  renderEnvCards();
+}
+
 function renderEnvCards() {
+  // 一级分类菜单
+  const catTabsEl = document.getElementById('env-category-tabs');
+  if (catTabsEl) {
+    catTabsEl.innerHTML = ENV_CATEGORIES.map(c =>
+      `<button class="env-gtab ${currentEnvCategory===c.key?'active':''}" style="font-weight:700;" onclick="filterEnvCategory('${c.key}')">${c.icon} ${c.label}</button>`
+    ).join('');
+  }
+
+  const visibleGroups = currentEnvCategory === 'all'
+    ? ENV_GROUPS
+    : ENV_GROUPS.filter(g => g.category === currentEnvCategory);
+
   const tabsEl = document.getElementById('env-group-tabs');
   const allDot = (g) => {
     const total = g.vars.length; const filled = g.vars.filter(v=>v.value.trim()).length;
@@ -3101,13 +3130,13 @@ function renderEnvCards() {
     if (filled<total) return {color:'var(--warn)',label:`${filled}/${total}`};
     return {color:'var(--ok)',label:'已配置'};
   };
-  const anyConfigured = ENV_GROUPS.some(g=>g.vars.some(v=>v.value.trim()));
-  const allConfigured = ENV_GROUPS.every(g=>g.vars.every(v=>v.value.trim()));
+  const anyConfigured = visibleGroups.some(g=>g.vars.some(v=>v.value.trim()));
+  const allConfigured = visibleGroups.every(g=>g.vars.every(v=>v.value.trim()));
   const allTabColor = allConfigured?'var(--ok)':anyConfigured?'var(--warn)':'var(--txd)';
   tabsEl.innerHTML = `<button class="env-gtab ${currentEnvGroup==='all'?'active':''}" onclick="filterEnvGroup('all')"><span class="env-gtab-dot" style="background:${allTabColor}"></span>全部</button>` +
-    ENV_GROUPS.map(g=>{const s=allDot(g);return `<button class="env-gtab ${currentEnvGroup===g.key?'active':''}" onclick="filterEnvGroup('${g.key}')"><span class="env-gtab-dot" style="background:${s.color}"></span>${g.label}</button>`;}).join('');
+    visibleGroups.map(g=>{const s=allDot(g);return `<button class="env-gtab ${currentEnvGroup===g.key?'active':''}" onclick="filterEnvGroup('${g.key}')"><span class="env-gtab-dot" style="background:${s.color}"></span>${g.label}</button>`;}).join('');
   const cardsEl = document.getElementById('env-cards');
-  const groups = currentEnvGroup==='all'?ENV_GROUPS:ENV_GROUPS.filter(g=>g.key===currentEnvGroup);
+  const groups = currentEnvGroup==='all'?visibleGroups:visibleGroups.filter(g=>g.key===currentEnvGroup);
   cardsEl.innerHTML = groups.map(g=>{
     const dot=allDot(g);
     const rows=g.vars.map(v=>{
@@ -3205,55 +3234,22 @@ const ALL_PERMS = [
 ];
 
 // 普通用户 5 个等级（数字越小级别越高）
-const USER_LEVELS = [
-  {
-    num: 1, name: 'VIP 会员', badge: '👑',
-    desc: '最高用户等级，享有全部用户侧服务及优先支持通道。',
-    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname']
-  },
-  {
-    num: 2, name: '高级用户', badge: '⭐',
-    desc: '积累足量积分或完成实名认证后可晋升，解锁 API 接入权限。',
-    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname']
-  },
-  {
-    num: 3, name: '认证用户', badge: '✅',
-    desc: '完成实名认证的标准用户，可绑定三方账号并接入应用市场。',
-    perms: ['login','checkin','points','app_market','login_log','bind_oauth','realname']
-  },
-  {
-    num: 4, name: '普通用户', badge: '👤',
-    desc: '默认注册后所属等级，可使用基础登录与签到服务。',
-    perms: ['login','checkin','points','login_log']
-  },
-  {
-    num: 5, name: '受限用户', badge: '🔒',
-    desc: '因违规或未完成初始设置而受限，仅保留基础登录权限。',
-    perms: ['login']
-  },
-];
+// ── 等级管理（后端驱动）──
+let _allLevels = [];
+let currentLvlGroup = 'user';
+let currentEditLvl = null;
 
-// 管理员 3 个等级（数字越小权限越大）
-const ADMIN_LEVELS = [
-  {
-    num: 1, name: '超级管理员', badge: '🛡️',
-    desc: '拥有平台全部权限，包括系统配置、等级管理与所有管理功能。',
-    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname','adm_users','adm_apps','adm_logs','adm_levels','sys_config']
-  },
-  {
-    num: 2, name: '运营管理员', badge: '📋',
-    desc: '负责日常用户与应用管理，可查看全量日志，不可修改系统配置。',
-    perms: ['login','checkin','points','app_market','login_log','bind_oauth','api_access','realname','adm_users','adm_apps','adm_logs']
-  },
-  {
-    num: 3, name: '只读管理员', badge: '👁️',
-    desc: '仅可查看用户信息与日志，无编辑与审核权限。',
-    perms: ['login','login_log','adm_users','adm_logs']
-  },
-];
-
-let currentLvlGroup = 'user'; // 'user' | 'admin'
-let currentEditLvl = null;    // 当前编辑的等级对象引用
+async function loadLevels() {
+  const { ok, data } = await api('GET', '/admin/levels');
+  if (ok) _allLevels = data.levels || [];
+  renderLevelCards();
+  // 更新组 tab 计数
+  const uc = _allLevels.filter(l => l.grp === 'user').length;
+  const ac = _allLevels.filter(l => l.grp === 'admin').length;
+  const tabs = document.querySelectorAll('.lvl-gtab-count');
+  if (tabs[0]) tabs[0].textContent = `${uc} 个等级`;
+  if (tabs[1]) tabs[1].textContent = `${ac} 个等级`;
+}
 
 function switchLvlGroup(group) {
   currentLvlGroup = group;
@@ -3261,68 +3257,73 @@ function switchLvlGroup(group) {
     b.classList.toggle('active', (group==='user' && i===0) || (group==='admin' && i===1));
   });
   const isUser = group === 'user';
-  document.getElementById('lvl-group-label').textContent  = isUser ? '普通用户组' : '管理员组';
+  const cnt = _allLevels.filter(l => l.grp === group).length;
+  document.getElementById('lvl-group-label').textContent  = isUser ? '普通用户组（标识符 U）' : '管理员组（标识符 A）';
   document.getElementById('lvl-group-sub').textContent    = isUser
-    ? '共 5 个等级，数字越小代表等级越高。各等级可使用的服务范围不同，高等级包含低等级的全部权限。'
-    : '共 3 个等级，数字越小代表权限越大。管理员等级决定其可操作的管理范围。';
+    ? `共 ${cnt} 个等级，数字越小代表等级越高。外部系统可用 U+数字（如 U3）作为请求标识。`
+    : `共 ${cnt} 个等级，数字越小权限越大。外部系统可用 A+数字（如 A1）作为请求标识。`;
   renderLevelCards();
 }
 
 function renderLevelCards() {
-  const levels = currentLvlGroup === 'user' ? USER_LEVELS : ADMIN_LEVELS;
+  const levels = _allLevels.filter(l => l.grp === currentLvlGroup).sort((a,b) => a.num - b.num);
   const container = document.getElementById('lvl-cards');
-
+  if (!container) return;
+  if (!levels.length) {
+    container.innerHTML = '<div style="text-align:center;padding:32px;color:var(--txd);">该组暂无等级，点击「新增等级」创建</div>';
+    return;
+  }
   container.innerHTML = levels.map(lv => {
+    const perms = JSON.parse(lv.perms || '[]');
     const permTags = ALL_PERMS.map(p => {
-      const on = lv.perms.includes(p.key);
+      const on = perms.includes(p.key);
       return `<span class="lvl-perm-tag ${on?'on':'off'}">${on?'✓':'✗'} ${p.name}</span>`;
     }).join('');
-
-    // 用户数 mock
-    const mockCounts = {1:12, 2:48, 3:186, 4:1108, 5:23, 99:5};
-    const userCount = mockCounts[lv.num] || Math.floor(Math.random()*100+10);
-
     return `
     <div class="lvl-card">
       <div class="lvl-rank">
-        <div class="lvl-rank-num">Lv.${lv.num}</div>
-        <div class="lvl-rank-txt">等级</div>
+        <div class="lvl-rank-num">${lv.level_tag}</div>
+        <div class="lvl-rank-txt">Lv.${lv.num}</div>
       </div>
       <div class="lvl-body">
         <div class="lvl-name-row">
           <span style="font-size:16px;">${lv.badge}</span>
           <span class="lvl-name">${lv.name}</span>
-          <span class="badge grey" style="font-size:10px;">${userCount} 名用户</span>
+          <span class="badge grey" style="font-size:10px;">${lv.user_count} 名用户</span>
         </div>
-        <div class="lvl-desc">${lv.desc}</div>
+        <div class="lvl-desc">${lv.descr}</div>
         <div class="lvl-perms">${permTags}</div>
       </div>
       <div class="lvl-actions">
-        <button class="btn" style="font-size:11px;padding:4px 10px;" onclick='openLvlEditModal(${lv.num})'>编辑</button>
-        <button class="btn" style="font-size:11px;padding:4px 10px;color:var(--txd);">查看用户</button>
+        <button class="btn" style="font-size:11px;padding:4px 10px;" onclick='openLvlEditModal("${lv.id}")'>编辑</button>
+        <button class="btn" style="font-size:11px;padding:4px 10px;color:var(--err);border-color:var(--err);" onclick='deleteLevelById("${lv.id}","${lv.level_tag}")'>删除</button>
       </div>
     </div>`;
   }).join('');
 }
 
-function openLvlEditModal(num) {
-  const levels = currentLvlGroup === 'user' ? USER_LEVELS : ADMIN_LEVELS;
-  // 若未传 num，编辑第一个作为模板示例
-  const lv = num ? levels.find(l => l.num === num) : levels[0];
-  if (!lv) return;
-  currentEditLvl = lv;
+function openLvlEditModal(id) {
+  const lv = id ? _allLevels.find(l => l.id === id) : null;
+  currentEditLvl = lv ? { ...lv, perms: JSON.parse(lv.perms || '[]'), _isNew: false }
+                     : { grp: currentLvlGroup, num: '', name: '', badge: '👤', descr: '', perms: [], _isNew: true };
 
-  const groupLabel = currentLvlGroup === 'user' ? '普通用户' : '管理员';
-  document.getElementById('lm-icon').textContent  = lv.badge;
-  document.getElementById('lm-title').textContent = `编辑等级 · ${groupLabel} Lv.${lv.num}`;
-  document.getElementById('lm-sub').textContent   = '修改该等级的名称、描述与可用服务权限';
-  document.getElementById('lm-name').value        = lv.name;
-  document.getElementById('lm-num').value         = `${groupLabel} Lv.${lv.num}`;
-  document.getElementById('lm-desc-input').value  = lv.desc;
+  const groupLabel = currentEditLvl.grp === 'user' ? '普通用户' : '管理员';
+  document.getElementById('lm-icon').textContent  = currentEditLvl.badge;
+  document.getElementById('lm-title').textContent = currentEditLvl._isNew ? `新增等级 · ${groupLabel}` : `编辑等级 · ${currentEditLvl.level_tag}`;
+  document.getElementById('lm-sub').textContent   = currentEditLvl._isNew ? '创建新等级并配置权限' : '修改该等级的名称、描述与可用服务权限';
+  document.getElementById('lm-name').value        = currentEditLvl.name;
+  const numInput = document.getElementById('lm-num');
+  if (currentEditLvl._isNew) {
+    numInput.value = ''; numInput.readOnly = false;
+    numInput.placeholder = '等级数字（1-9）'; numInput.style.background = '';
+  } else {
+    numInput.value = `${groupLabel} Lv.${currentEditLvl.num}（${currentEditLvl.level_tag}）`;
+    numInput.readOnly = true; numInput.style.background = 'var(--bg)';
+  }
+  document.getElementById('lm-desc-input').value  = currentEditLvl.descr;
 
-  // 渲染权限开关
   document.getElementById('lm-perms').innerHTML = ALL_PERMS.map(p => {
-    const checked = lv.perms.includes(p.key) ? 'checked' : '';
+    const checked = currentEditLvl.perms.includes(p.key) ? 'checked' : '';
     return `
     <div class="perm-row">
       <div class="perm-row-info">
@@ -3348,13 +3349,36 @@ function onPermToggle(el, key) {
   }
 }
 
-function saveLvlModal() {
+async function saveLvlModal() {
   if (!currentEditLvl) return;
-  currentEditLvl.name = document.getElementById('lm-name').value.trim() || currentEditLvl.name;
-  currentEditLvl.desc = document.getElementById('lm-desc-input').value.trim() || currentEditLvl.desc;
+  const name  = document.getElementById('lm-name').value.trim();
+  const descr = document.getElementById('lm-desc-input').value.trim();
+  if (!name) { showToast('⚠️ 请填写等级名称'); return; }
+
+  if (currentEditLvl._isNew) {
+    const num = parseInt(document.getElementById('lm-num').value);
+    if (isNaN(num) || num < 1 || num > 9) { showToast('⚠️ 等级数字必须为 1-9'); return; }
+    const { ok, data } = await api('POST', '/admin/levels', {
+      grp: currentEditLvl.grp, num, name, badge: currentEditLvl.badge, descr, perms: currentEditLvl.perms,
+    });
+    if (!ok) { showToast('⚠️ ' + (data.error || '创建失败')); return; }
+    showToast('✓ 等级已创建');
+  } else {
+    const { ok, data } = await api('PATCH', `/admin/levels/${currentEditLvl.id}`, {
+      name, descr, badge: currentEditLvl.badge, perms: currentEditLvl.perms,
+    });
+    if (!ok) { showToast('⚠️ ' + (data.error || '保存失败')); return; }
+    showToast('✓ 等级配置已保存');
+  }
   closeLvlModal();
-  renderLevelCards();
-  showToast('✓ 等级配置已保存');
+  loadLevels();
+}
+
+async function deleteLevelById(id, tag) {
+  if (!confirm(`确认删除等级 ${tag}？该等级下有用户时无法删除。`)) return;
+  const { ok, data } = await api('DELETE', `/admin/levels/${id}`);
+  if (ok) { showToast('✓ 已删除'); loadLevels(); }
+  else showToast('⚠️ ' + (data.error || '删除失败'));
 }
 
 function closeLvlModal() {
@@ -3367,7 +3391,7 @@ function closeLvlModal() {
 // ══════════════════════════════════════════
 const ENV_GROUPS = [
   {
-    key: 'wechat', label: '微信公众号', icon: '💬', color: '#07C160',
+    key: 'wechat', category: 'oauth', label: '微信公众号', icon: '💬', color: '#07C160',
     desc: '微信网页授权登录（OAuth2.0）',
     vars: [
       { key: 'WECHAT_APP_ID',       label: 'AppID',          desc: '微信公众号 AppID，在公众平台「开发 → 基本配置」获取', required: false,  secret: false, placeholder: 'wx1234567890abcdef', value: '' },
@@ -3376,7 +3400,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'wecom', label: '企业微信', icon: '🏢', color: '#1677FF',
+    key: 'wecom', category: 'oauth', label: '企业微信', icon: '🏢', color: '#1677FF',
     desc: '企业微信自建应用扫码登录',
     vars: [
       { key: 'WECOM_CORP_ID',      label: 'Corp ID',    desc: '企业微信企业 ID，在管理后台「我的企业」页获取',             required: false,  secret: false, placeholder: 'ww1234567890abcdef', value: '' },
@@ -3386,7 +3410,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'feishu', label: '飞书', icon: '📗', color: '#00B96B',
+    key: 'feishu', category: 'oauth', label: '飞书', icon: '📗', color: '#00B96B',
     desc: '飞书自建应用 OAuth 登录',
     vars: [
       { key: 'FEISHU_APP_ID',      label: 'App ID',     desc: '飞书开放平台「应用凭证」中的 App ID',                    required: false,  secret: false, placeholder: 'cli_a1b2c3d4e5f60001', value: '' },
@@ -3395,7 +3419,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'dingtalk', label: '钉钉', icon: '📌', color: '#1677FF',
+    key: 'dingtalk', category: 'oauth', label: '钉钉', icon: '📌', color: '#1677FF',
     desc: '钉钉企业内部应用 OAuth 2.0 登录',
     vars: [
       { key: 'DINGTALK_CLIENT_ID',     label: 'Client ID',     desc: '钉钉开放平台应用的 Client ID（即 AppKey）',      required: false,  secret: false, placeholder: 'dingxxxxxxxxxxxxxxxx', value: '' },
@@ -3414,7 +3438,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'sms_aliyun', label: '阿里云短信', icon: '☁️', color: '#FF6A00',
+    key: 'sms_aliyun', category: 'msg', label: '阿里云短信', icon: '☁️', color: '#FF6A00',
     desc: '阿里云短信服务 SMS',
     vars: [
       { key: 'ALIYUN_ACCESS_KEY_ID',     label: 'Access Key ID',     desc: '阿里云 RAM 控制台「用户 → AccessKey 管理」获取', required: false, secret: false, placeholder: 'LTAIxxxxxxxxxxxxxxxx', value: '' },
@@ -3424,7 +3448,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'sms_tencent', label: '腾讯云短信', icon: '🐧', color: '#1677FF',
+    key: 'sms_tencent', category: 'msg', label: '腾讯云短信', icon: '🐧', color: '#1677FF',
     desc: '腾讯云 SMS 短信服务',
     vars: [
       { key: 'TENCENT_SMS_SECRET_ID',   label: 'SecretId',    desc: '腾讯云控制台「访问管理 → 访问密钥 → API 密钥管理」获取', required: false, secret: false, placeholder: '请填写腾讯云 SecretId', value: '' },
@@ -3436,7 +3460,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'sms_common', label: '短信公共配置', icon: '⚙️', color: '#888880',
+    key: 'sms_common', category: 'msg', label: '短信公共配置', icon: '⚙️', color: '#888880',
     desc: '短信服务商选择与通用参数',
     vars: [
       { key: 'SMS_PROVIDER',   label: '当前短信服务商', desc: '填写 volcengine / aliyun / tencent，决定实际发送方',  required: false,  secret: false, placeholder: 'volcengine', value: '' },
@@ -3455,7 +3479,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'kyc_aliyun', label: 'KYC · 阿里云', icon: '☁️', color: '#FF6A00',
+    key: 'kyc_aliyun', category: 'kyc', label: 'KYC · 阿里云', icon: '☁️', color: '#FF6A00',
     desc: '阿里云实人认证（金融级活体人脸核身）',
     vars: [
       { key: 'ALIYUN_KYC_ACCESS_KEY_ID',     label: 'Access Key ID',     desc: '可复用短信 AK 或单独创建，建议开通 cloudauth 权限',   required: false, secret: false, placeholder: 'LTAIxxxxxxxxxxxxxxxx', value: '' },
@@ -3466,7 +3490,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'kyc_tencent', label: 'KYC · 腾讯云', icon: '🐧', color: '#1677FF',
+    key: 'kyc_tencent', category: 'kyc', label: 'KYC · 腾讯云', icon: '🐧', color: '#1677FF',
     desc: '腾讯云慧眼人脸核身（实名认证）',
     vars: [
       { key: 'TENCENT_KYC_SECRET_ID',    label: 'SecretId',      desc: '可复用短信服务的 SecretId，或单独创建，需开通慧眼权限',  required: false, secret: false, placeholder: '请填写腾讯云 SecretId', value: '' },
@@ -3477,7 +3501,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'kyc_didit', label: 'KYC · Didit', icon: '🪪', color: '#5A4AF4',
+    key: 'kyc_didit', category: 'kyc', label: 'KYC · Didit', icon: '🪪', color: '#5A4AF4',
     desc: 'Didit 身份认证平台（didit.me）— 每月 500 次免费，$0.33/次全套 KYC',
     vars: [
       { key: 'DIDIT_API_KEY',         label: 'API Key',         desc: '在 business.didit.me 注册后，从工作台或 programmatic/verify-email 响应中获取', required: false, secret: true,  placeholder: 'dk_live_xxxxxxxxxxxxxxxx', value: '' },
@@ -3486,7 +3510,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'stripe_pay', label: 'Stripe 支付', icon: '💳', color: '#6772E5',
+    key: 'stripe_pay', category: 'pay', label: 'Stripe 支付', icon: '💳', color: '#6772E5',
     desc: 'Stripe 支付接口密钥，同时供 Stripe Identity KYC 使用',
     vars: [
       { key: 'STRIPE_SECRET_KEY',      label: 'Secret Key（必填）',   desc: 'Stripe Dashboard → Developers → API Keys → Secret key（sk_live_... 或 sk_test_...）',   required: false, secret: true,  placeholder: 'sk_live_xxxxxxxxxxxxxxxxxxxx', value: '' },
@@ -3495,14 +3519,14 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'kyc_stripe', label: 'KYC · Stripe Identity', icon: '🪪', color: '#6772E5',
+    key: 'kyc_stripe', category: 'kyc', label: 'KYC · Stripe Identity', icon: '🪪', color: '#6772E5',
     desc: 'Stripe Identity 身份认证 — $1.50/次，已有 Stripe 账号可直接开通。Secret Key 在上方「Stripe 支付」分组中配置。',
     vars: [
       { key: 'STRIPE_WEBHOOK_SECRET', label: 'Webhook Signing Secret（KYC）', desc: 'Stripe Dashboard → Webhooks 中为 /webhook/kyc/stripe 端点单独配置的签名密钥 (whsec_...)',  required: false, secret: true, placeholder: 'whsec_xxxxxxxxxxxxxxxxxxxx', value: '' },
     ]
   },
   {
-    key: 'kyc_common', label: 'KYC 公共配置', icon: '🪪', color: '#7A5AF8',
+    key: 'kyc_common', category: 'kyc', label: 'KYC 公共配置', icon: '🪪', color: '#7A5AF8',
     desc: '实名认证服务商选择与通用参数',
     vars: [
       { key: 'KYC_PROVIDER',     label: '当前 KYC 服务商', desc: '填写 didit / stripe / volcengine / aliyun / tencent，多个用逗号分隔参与轮询', required: false, secret: false, placeholder: 'didit', value: '' },
@@ -3511,7 +3535,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'google', label: 'Google OAuth', icon: '🔵', color: '#4285F4',
+    key: 'google', category: 'oauth', label: 'Google OAuth', icon: '🔵', color: '#4285F4',
     desc: 'Google 账号登录（标准 OAuth 2.0）',
     vars: [
       { key: 'GOOGLE_CLIENT_ID',     label: 'Client ID',     desc: 'Google Cloud Console → API 和服务 → 凭证 → OAuth 2.0 客户端 ID',         required: false, secret: false, placeholder: '123456789-abc.apps.googleusercontent.com', value: '' },
@@ -3520,7 +3544,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'apple', label: 'Apple Sign In', icon: '🍎', color: '#000000',
+    key: 'apple', category: 'oauth', label: 'Apple Sign In', icon: '🍎', color: '#000000',
     desc: 'Sign in with Apple（需 Apple Developer 账号 $99/年，必须 HTTPS）',
     vars: [
       { key: 'APPLE_CLIENT_ID',   label: 'Services ID (Client ID)', desc: 'Apple Developer → Identifiers 中创建的 Services ID，如 com.yourcompany.sso', required: false, secret: false, placeholder: 'com.yourcompany.sso',    value: '' },
@@ -3531,7 +3555,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'github', label: 'GitHub OAuth', icon: '🐙', color: '#24292E',
+    key: 'github', category: 'oauth', label: 'GitHub OAuth', icon: '🐙', color: '#24292E',
     desc: 'GitHub OAuth App 登录',
     vars: [
       { key: 'GITHUB_CLIENT_ID',     label: 'Client ID',     desc: 'GitHub Developer Settings → OAuth Apps 中获取',  required: false, secret: false, placeholder: 'Iv1.xxxxxxxxxxxxxxxx', value: '' },
@@ -3539,7 +3563,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'microsoft', label: 'Microsoft OAuth', icon: '🪟', color: '#0078D4',
+    key: 'microsoft', category: 'oauth', label: 'Microsoft OAuth', icon: '🪟', color: '#0078D4',
     desc: 'Microsoft Azure AD / 个人账号登录',
     vars: [
       { key: 'MICROSOFT_CLIENT_ID',     label: 'Client ID（应用ID）', desc: 'Azure Portal → 应用注册 → 概述 中获取',                    required: false, secret: false, placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', value: '' },
@@ -3548,7 +3572,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'qq', label: 'QQ 开放平台', icon: '🐧', color: '#12B7F5',
+    key: 'qq', category: 'oauth', label: 'QQ 开放平台', icon: '🐧', color: '#12B7F5',
     desc: 'QQ OAuth 2.0 登录（需申请 QQ 开放平台应用）',
     vars: [
       { key: 'QQ_APP_ID',     label: 'App ID（client_id）', desc: 'QQ 互联 → 我的应用 → 基本信息',                    required: false, secret: false, placeholder: '100000000', value: '' },
@@ -3556,7 +3580,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'douyin', label: '抖音开放平台', icon: '🎵', color: '#000000',
+    key: 'douyin', category: 'oauth', label: '抖音开放平台', icon: '🎵', color: '#000000',
     desc: '抖音 OAuth 2.0 登录（需企业主体认证）',
     vars: [
       { key: 'DOUYIN_CLIENT_KEY',    label: 'Client Key',    desc: '抖音开放平台应用的 client_key',                           required: false, secret: false, placeholder: 'aw1234567890abcdef', value: '' },
@@ -3565,7 +3589,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'kuaishou', label: '快手开放平台', icon: '▶️', color: '#FF4906',
+    key: 'kuaishou', category: 'oauth', label: '快手开放平台', icon: '▶️', color: '#FF4906',
     desc: '快手 OAuth 2.0 登录',
     vars: [
       { key: 'KUAISHOU_APP_ID',      label: 'App ID',        desc: '快手开放平台应用的 app_id',                               required: false, secret: false, placeholder: 'ks1234567890',        value: '' },
@@ -3574,7 +3598,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'xiaohongshu', label: '小红书开放平台', icon: '📕', color: '#FF2442',
+    key: 'xiaohongshu', category: 'oauth', label: '小红书开放平台', icon: '📕', color: '#FF2442',
     desc: '小红书 OAuth 2.0 登录（需申请合作资质）',
     vars: [
       { key: 'XHS_APP_ID',      label: 'App ID',        desc: '小红书开放平台应用的 appid',                                  required: false, secret: false, placeholder: 'xhs1234567890',       value: '' },
@@ -3583,7 +3607,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'bilibili', label: 'Bilibili 开放平台', icon: '📺', color: '#00A1D6',
+    key: 'bilibili', category: 'oauth', label: 'Bilibili 开放平台', icon: '📺', color: '#00A1D6',
     desc: 'Bilibili OAuth 2.0 登录（需申请合作开发者）',
     vars: [
       { key: 'BILIBILI_CLIENT_ID',     label: 'Client ID',     desc: 'B站开放平台应用的 client_id',                           required: false, secret: false, placeholder: 'bili1234567890',      value: '' },
@@ -3592,7 +3616,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'zeabur_email', label: 'Zeabur Email', icon: '✉️', color: '#7B3FF2',
+    key: 'zeabur_email', category: 'msg', label: 'Zeabur Email', icon: '✉️', color: '#7B3FF2',
     desc: 'Zeabur 托管邮件服务，配置后优先级高于 SMTP。在 Zeabur 控制台创建 Email Service 即可获取 Token。',
     vars: [
       { key: 'ZEABUR_EMAIL_TOKEN', label: 'Email Token',  desc: 'Zeabur 控制台 → Email Service → API Token。填写后自动启用，优先于 SMTP 发送。', required: false, secret: true,  placeholder: 'ze_xxxxxxxxxxxxxxxxxxxxxxxx', value: '' },
@@ -3600,7 +3624,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'smtp', label: '邮件 SMTP', icon: '📧', color: '#4A90D9',
+    key: 'smtp', category: 'msg', label: '邮件 SMTP', icon: '📧', color: '#4A90D9',
     desc: '邮箱验证码与系统通知邮件发送',
     vars: [
       { key: 'SMTP_HOST',   label: 'SMTP 主机', desc: '邮件服务器地址，如 smtp.qq.com、smtp.163.com', required: false,  secret: false, placeholder: 'smtp.qq.com',   value: '' },
@@ -3612,7 +3636,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'jwt', label: 'JWT / 安全', icon: '🔐', color: '#7A5AF8',
+    key: 'jwt', category: 'system', label: 'JWT / 安全', icon: '🔐', color: '#7A5AF8',
     desc: 'Token 签发与会话安全配置',
     vars: [
       { key: 'JWT_SECRET',        label: 'JWT 密钥',         desc: '用于签发 Token 的随机密钥，建议 64 位以上随机字符串', required: false,  secret: true,  placeholder: '',  value: '' },
@@ -3623,7 +3647,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'server', label: '服务器基础', icon: '🖥️', color: '#555548',
+    key: 'server', category: 'system', label: '服务器基础', icon: '🖥️', color: '#555548',
     desc: '服务进程、端口与运行环境配置',
     vars: [
       { key: 'PORT',         label: '监听端口',  desc: 'Express 服务监听的端口号',            required: false, secret: false, placeholder: '3000',                   value: '' },
@@ -3633,7 +3657,7 @@ const ENV_GROUPS = [
     ]
   },
   {
-    key: 'footer', label: '页脚配置', icon: '📄', color: '#666655',
+    key: 'footer', category: 'system', label: '页脚配置', icon: '📄', color: '#666655',
     desc: '网站底部版权信息配置。其他页脚项目（备案号、许可证等）请在下方「页脚管理」面板中动态添加。',
     vars: [
       { key: 'FOOTER_DISTRIBUTOR',     label: '分发人/组织名称', desc: '版权行中 QWQ INC. 之后显示的分发人。留空则只显示 "Copyright © 2026 QWQ INC."（版权归属不可删除，遵循 MIT 协议）', required: false, secret: false, placeholder: '如：海南省儋州市许白网络文化传媒有限公司', value: '' },
@@ -5020,5 +5044,6 @@ document.querySelectorAll('.modal-mask').forEach(m => {
   m.addEventListener('click', e => { if(e.target===m) m.classList.remove('show'); });
 });
 </script>
+__FOOTER_HTML__
 </body>
 </html>

@@ -43,6 +43,18 @@ try {
   )`);
 } catch(_) {}
 
+// API 调用日志表（入站+出站）
+try {
+  db.exec(`CREATE TABLE IF NOT EXISTS api_call_logs (
+    id          TEXT PRIMARY KEY,
+    direction   TEXT NOT NULL DEFAULT 'inbound',
+    method      TEXT, path TEXT, provider TEXT,
+    status      INTEGER, success INTEGER NOT NULL DEFAULT 1,
+    error_msg   TEXT, duration_ms INTEGER, ip TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+} catch(_) {}
+
 // 轮询策略配置
 try {
   db.exec(`INSERT OR IGNORE INTO shop_config(key_name,value) VALUES
