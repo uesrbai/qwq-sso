@@ -1453,6 +1453,48 @@
     document.getElementById('custom-domain-wrap').classList.toggle('open', this.value === 'custom');
   });
 
+  // ── 邮箱域名策略：让「账号所属域」下拉框真实反映后端配置 ──
+  // v3.3.2 之前这两个下拉框纯粹是输入辅助（帮你把 @gmail.com 拼到输入框后面），
+  // 后端没有任何校验，管理员以为配了限制其实并没有。现在选项由后端策略决定，
+  // 且后端会真正拦截——前端这里只是提前告知，不是安全边界。
+  async function initDomainPolicy() {
+    let policy = { mode: 'off', domains: [] };
+    try {
+      const r = await fetch('/api/public/email-domain-policy');
+      if (r.ok) policy = await r.json();
+    } catch (_) { return; }          // 拿不到就保持原样，不影响登录
+    if (policy.mode === 'off') return;
+
+    [['acct-domain', 'domain-policy-hint'], ['reg-domain', 'reg-domain-policy-hint']].forEach(([selId, hintId]) => {
+      const sel = document.getElementById(selId);
+      if (!sel) return;
+
+      if (policy.mode === 'whitelist') {
+        // 只能选允许的域，不给「不限」和「自定义」
+        sel.innerHTML = policy.domains
+          .map(d => `<option value="@${d}">@${d}</option>`).join('');
+      } else {
+        // 黑名单：保留原有选项，但把被禁的域摘掉
+        [...sel.options].forEach(o => {
+          const d = (o.value || '').replace(/^@/, '').toLowerCase();
+          if (d && d !== 'custom' && policy.domains.some(b => d === b || d.endsWith('.' + b))) o.remove();
+        });
+      }
+
+      if (!document.getElementById(hintId)) {
+        const hint = document.createElement('div');
+        hint.id = hintId;
+        hint.style.cssText = 'font-size:11px;margin-top:4px;line-height:1.5;color:' +
+          (policy.mode === 'whitelist' ? 'var(--brand,#0071E3)' : 'var(--warn,#FF9500)');
+        hint.textContent = policy.mode === 'whitelist'
+          ? `仅限 ${policy.domains.map(d => '@' + d).join('、')} 邮箱注册`
+          : `以下邮箱域已被禁用：${policy.domains.map(d => '@' + d).join('、')}`;
+        sel.parentElement.appendChild(hint);
+      }
+    });
+  }
+  initDomainPolicy();
+
   // ── 注册面板：账号类型切换 ──
   function onRegTypeChange() {
     const type = document.getElementById('reg-type').value;

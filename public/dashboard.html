@@ -3734,12 +3734,20 @@ const ENV_GROUPS = [
     ]
   },
   {
+    key: 'email_domain', category: 'system', label: '邮箱域名策略', icon: '🛡️', color: '#0071E3',
+    desc: '限制哪些邮箱域可以注册/登录本系统。策略作用于发验证码、注册、验证码自动建号三个入口；已存在账号的密码登录不受影响，避免事后加黑名单把老用户锁在门外。',
+    vars: [
+      { key: 'EMAIL_DOMAIN_MODE', label: '策略模式', desc: 'off = 不限制（默认）；whitelist = 仅允许列表内的域；blacklist = 禁止列表内的域', required: false, secret: false, placeholder: 'off', value: '' },
+      { key: 'EMAIL_DOMAIN_LIST', label: '域名列表', desc: '逗号分隔，不用带 @。子域自动匹配（填 example.com 则 mail.example.com 也命中）。列表为空时策略自动失效', required: false, secret: false, placeholder: 'example.com, company.cn', value: '' },
+    ]
+  },
+  {
     key: 'server', category: 'system', label: '服务器基础', icon: '🖥️', color: '#555548',
     desc: '服务进程、端口与运行环境配置',
     vars: [
       { key: 'PORT',         label: '监听端口',  desc: 'Express 服务监听的端口号',            required: false, secret: false, placeholder: '3000',                   value: '' },
       { key: 'BASE_URL',     label: '服务根地址',desc: '对外访问的完整根地址（含协议和端口）', required: false,  secret: false, placeholder: 'https://sso.example.com', value: '' },
-      { key: 'NODE_ENV',     label: '运行环境',  desc: 'development / production，影响验证码是否真实发送', required: false, secret: false, placeholder: 'production', value: '' },
+      { key: 'NODE_ENV',     label: '运行环境',  desc: 'development / production。注意：不影响验证码是否真实发送——那取决于是否配置了短信/邮件服务商', required: false, secret: false, placeholder: 'production', value: '' },
       { key: 'CORS_ORIGIN',  label: 'CORS 域名', desc: '允许跨域的前端域名，多个用逗号分隔，* 表示全部允许', required: false, secret: false, placeholder: 'https://app.example.com', value: '' },
     ]
   },

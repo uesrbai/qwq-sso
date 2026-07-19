@@ -13,6 +13,44 @@ const { sendEmailCode, sendEmail } = require('./email');
 const router = express.Router();
 const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 const isPhone = s => /^1[3-9]\d{9}$/.test(s);
+
+// ──────────────────────────────────────────
+// 邮箱域名白/黑名单
+//
+// 由两个环境变量控制：
+//   EMAIL_DOMAIN_MODE = off | whitelist | blacklist   （缺省 off，即不限制）
+//   EMAIL_DOMAIN_LIST = example.com, foo.cn           （逗号分隔，不带 @）
+//
+// ⚠️ 策略只作用于「新账号进入系统」的路径：发验证码、注册、验证码自动注册。
+// 已存在账号的密码登录**不拦截**——否则管理员事后加一条黑名单就会把
+// 已有用户直接锁死在门外，那是误伤而不是策略。
+// ──────────────────────────────────────────
+function emailDomainPolicy() {
+  const mode = (process.env.EMAIL_DOMAIN_MODE || 'off').trim().toLowerCase();
+  const list = (process.env.EMAIL_DOMAIN_LIST || '')
+    .split(',')
+    .map(s => s.trim().toLowerCase().replace(/^@/, ''))   // 容忍管理员填成 @example.com
+    .filter(Boolean);
+  return { mode: ['whitelist', 'blacklist'].includes(mode) ? mode : 'off', list };
+}
+
+/** 返回 null 表示放行，否则返回给用户看的错误文案 */
+function checkEmailDomain(email) {
+  const { mode, list } = emailDomainPolicy();
+  if (mode === 'off' || !list.length) return null;
+
+  const domain = String(email).split('@').pop().trim().toLowerCase();
+  // 子域也算命中：sub.example.com 属于 example.com
+  const hit = list.some(d => domain === d || domain.endsWith('.' + d));
+
+  if (mode === 'whitelist' && !hit) {
+    return `当前仅允许以下邮箱域注册或登录：${list.map(d => '@' + d).join('、')}`;
+  }
+  if (mode === 'blacklist' && hit) {
+    return `邮箱域 @${domain} 已被管理员禁用，请更换其他邮箱`;
+  }
+  return null;
+}
 const genCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 function logLogin(data) {
@@ -87,6 +125,8 @@ router.post('/sms/verify', (req, res) => {
 router.post('/email/send-code', async (req, res) => {
   const { email } = req.body;
   if (!email || !isEmail(email)) return res.status(400).json({ error: '邮箱格式不正确' });
+  const domainErr = checkEmailDomain(email);
+  if (domainErr) return res.status(403).json({ error: domainErr });
   const code = genCode();
   const expire = parseInt(process.env.EMAIL_CODE_EXPIRE || '600');
   otp.set.run(`email:${email}`, code, Date.now() + expire * 1000);
@@ -123,6 +163,10 @@ router.post('/email/verify-code', (req, res) => {
   otp.del.run(`email:${email}`);
   let user = users.findByEmail.get(email);
   if (!user) {
+    // 这条路径会自动建号，等同注册，所以要过域名策略；
+    // 已存在的账号不再校验，避免事后加黑名单把老用户锁死
+    const domainErr = checkEmailDomain(email);
+    if (domainErr) return res.status(403).json({ error: domainErr });
     const seq = nextUidSeq(); const id = uuidv4();
     users.insert.run({ id, uid_seq: seq, name: email.split('@')[0], email, phone: null, password_hash: null, role: 'user', admin_level: null, user_level: 4, status: 'active' });
     user = users.findById.get(id);
@@ -137,9 +181,11 @@ router.post('/email/verify-code', (req, res) => {
 router.post('/email/register', async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !isEmail(email)) return res.status(400).json({ error: '邮箱格式不正确' });
+  const domainErr = checkEmailDomain(email);
+  if (domainErr) return res.status(403).json({ error: domainErr });
   if (!password || password.length < 6) return res.status(400).json({ error: '密码至少6位' });
   if (users.findByEmail.get(email)) return res.status(400).json({ error: '该邮箱已注册' });
-  const hash = await bcrypt.hash(password, 10); const seq = nextUidSeq(); const id = uuidv4();
+  const hash = await bcrypt.hash(password, 12); const seq = nextUidSeq(); const id = uuidv4();
   users.insert.run({ id, uid_seq: seq, name: name || email.split('@')[0], email, phone: null, password_hash: hash, role: 'user', admin_level: null, user_level: 4, status: 'active' });
   const user = users.findById.get(id);
   const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
@@ -440,6 +486,12 @@ router.get('/admin/api-call-logs', requireAdmin(2), (req, res) => {
 });
 
 // ── 公开接口：已配置的登录平台（无需鉴权）──
+// 登录页据此渲染「账号所属域」下拉框：白名单模式给固定选项，黑名单模式给排除提示
+router.get('/public/email-domain-policy', (req, res) => {
+  const { mode, list } = emailDomainPolicy();
+  res.json({ success: true, mode: list.length ? mode : 'off', domains: list });
+});
+
 router.get('/public/configured-platforms', (req, res) => {
   // 各平台对应的必须环境变量 key
   const platformEnvKeys = {
@@ -718,7 +770,7 @@ router.post('/admin/users/:id/enable', requireAdmin(2), (req, res) => {
 router.post('/admin/users/:id/reset-password', requireAdmin(2), async (req, res) => {
   const { password } = req.body;
   if (!password || password.length < 6) return res.status(400).json({ error: '密码至少6位' });
-  users.updatePassword.run(await bcrypt.hash(password, 10), req.params.id);
+  users.updatePassword.run(await bcrypt.hash(password, 12), req.params.id);
   res.json({ success: true });
 });
 router.delete('/admin/users/:id/kyc', requireAdmin(2), (req, res) => {
