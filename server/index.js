@@ -42,7 +42,8 @@ const rateLimit = require('express-rate-limit');
 
 const { isSetupDone } = require('./db');
 const setupRoutes  = require('./setup');
-const oauthRoutes  = require('./oauth');
+const oauthRoutes  = require('./oauth');      // 本系统 → 去登录微信/飞书等（消费方）
+const providerRoutes = require('./provider'); // 第三方 → 用 QWQ SSO 登录（提供方）
 const apiRoutes    = require('./api');
 
 const app  = express();
@@ -155,6 +156,8 @@ app.use((req, res, next) => {
 app.use('/setup', setupRoutes);
 app.use('/auth',  oauthRoutes);
 app.use('/api',   apiRoutes);
+// OIDC Provider：/.well-known/openid-configuration 和 /oauth/* 挂在根路径（必须在 static 之前）
+app.use('/',      providerRoutes);
 app.use('/',      express.static(path.join(__dirname, '../public')));
 
 // ── 启动 ──

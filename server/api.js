@@ -5,7 +5,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
-const { db, nextUidSeq, users, oauth, otp, logs, apps, apiKeys, env, points } = require('./db');
+const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, apiKeys, env, points } = require('./db');
 const { signToken, requireAuth, requireAdmin, requireApiKey } = require('./auth');
 const { sendSmsCode } = require('./sms');
 const { sendEmailCode, sendEmail } = require('./email');
@@ -616,8 +616,13 @@ router.post('/apps/:id/auth', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 router.delete('/apps/:id/auth', requireAuth, (req, res) => {
+  const had = apps.isAuthed.get(req.user.uid, req.params.id);
   apps.revokeAuth.run(req.user.uid, req.params.id);
-  apps.decAuthUsers.run(req.params.id);
+  if (had) apps.decAuthUsers.run(req.params.id);
+  // 撤销授权要连带吊销已发出的访问令牌，否则第三方还能继续拿数据
+  idp.killTokens.run(req.params.id, req.user.uid);
+  db.prepare('UPDATE oauth_auth_codes SET used=1 WHERE app_id=? AND user_id=? AND used=0')
+    .run(req.params.id, req.user.uid);
   res.json({ success: true });
 });
 router.get('/apps/authed', requireAuth, (req, res) => {

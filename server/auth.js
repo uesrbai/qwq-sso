@@ -11,8 +11,13 @@ function signToken(payload) {
   let expiresIn = process.env.JWT_EXPIRES_IN || '7d';
   // 验证 expiresIn 格式：数字（秒）或带单位字符串（7d, 24h, 3600s 等）
   // 如果是纯数字且 <= 60，说明可能配置错了（单位混淆），强制用 7d
+  //
+  // 注意必须先判「整串都是数字」：早期写成 parseInt(expiresIn) <= 60，
+  // 而 parseInt('7d') === 7、parseInt('30d') === 30，导致 7d/30d/12h 这类
+  // 完全合法的配置也被当成错误值静默改成 7d（启动日志里会打出误报警告）。
+  const isPureNumber = /^\d+$/.test(String(expiresIn).trim());
   const asNum = parseInt(expiresIn);
-  if (!isNaN(asNum) && asNum <= 60) {
+  if (isPureNumber && asNum <= 60) {
     console.warn(`[JWT] JWT_EXPIRES_IN="${expiresIn}" 疑似配置错误（太短），已强制使用 7d`);
     expiresIn = '7d';
   }

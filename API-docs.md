@@ -15,6 +15,7 @@
 7. [管理端接口](#七管理端接口)
 8. [错误码说明](#八错误码说明)
 9. [对接流程示例](#九对接流程示例)
+10. [「使用 QWQ SSO 登录」— OIDC 接入](#十使用-qwq-sso-登录-oidc-接入)
 
 ---
 
@@ -1417,3 +1418,151 @@ await fetch(`{BASE_URL}/api/v1/users/${uid}/disable`, {
 ---
 
 *文档结束。如有问题请联系系统管理员，或查阅源码 `server/api.js`。*
+
+---
+
+## 十、「使用 QWQ SSO 登录」— OIDC 接入
+
+这是**第三方应用让用户用 QWQ SSO 账号登录**的标准方式，和第六章的开放 API 是两回事：
+
+| | 开放 API（第六章） | OIDC 登录（本章） |
+|---|---|---|
+| 凭据 | `sk_live_` API Key | `client_id` + `client_secret` |
+| 用户是否参与 | 否，后台直接查库 | 是，用户看到授权页并逐项确认 |
+| 拿到的数据 | 管理员授予的全部范围 | 仅用户本人勾选同意的 scope |
+| 适用场景 | 内部系统批量同步 | 第三方应用登录按钮 |
+
+QWQ SSO 实现了标准 OAuth2 授权码流程 + OpenID Connect，**可以直接用现成的 OIDC 客户端库接入**
+（Node 的 `openid-client`、Python 的 `authlib`、Java 的 `Spring Security OAuth2` 等），无需照着本文档手写。
+
+### 10.1 发现端点
+
+```
+GET https://qwqsso.zeabur.app/.well-known/openid-configuration
+```
+
+大多数 OIDC 库只要填这一个地址就能自动发现全部端点。核心信息：
+
+| 端点 | 地址 |
+|---|---|
+| authorization_endpoint | `/oauth/authorize` |
+| token_endpoint | `/oauth/token` |
+| userinfo_endpoint | `/oauth/userinfo` |
+| revocation_endpoint | `/oauth/revoke` |
+
+- `id_token` 签名算法为 **HS256**，密钥就是你的 `client_secret`（因此不需要 JWKS 端点）
+- 支持 **PKCE**（`S256` / `plain`），强烈建议移动端和 SPA 启用
+- `client_secret` 支持 `client_secret_post`（放 body）和 `client_secret_basic`（HTTP Basic）两种传法
+
+### 10.2 权限范围（scope）
+
+**最小化披露原则：没勾选的字段，`id_token` 和 `userinfo` 里一个都不会出现。**
+用户可以在授权页取消任何非必需项，取消后不影响登录本身。
+
+| scope | 含义 | 返回字段 | 可取消 |
+|---|---|---|---|
+| `openid` | 唯一标识（必需） | `sub` | 否 |
+| `profile` | 基本资料 | `name`、`picture`、`uid`、`level_tag`、`created_at` | 是 |
+| `email` | 邮箱 | `email`、`email_verified` | 是 |
+| `phone` | 手机号 | `phone_number`、`phone_number_verified` | 是 |
+| `kyc` | 实名状态（**敏感**） | `kyc_verified`、`kyc_name`（脱敏为「张**」）、`kyc_id_tail` | 是 |
+
+> `kyc` 在授权页会以橙色「敏感」标签突出显示。即使授权，真实姓名也只返回脱敏结果，
+> 完整姓名和证件号**永不通过本接口下发**。
+
+### 10.3 接入前提
+
+在**管理端 → 应用管理**中创建应用，拿到 `client_id` / `client_secret`，并填写 `callback_url`：
+
+- `callback_url` 必须与请求里的 `redirect_uri` **完全一致**（多个用英文逗号分隔）
+- 不匹配时系统**不会回跳**，而是直接报错——这是防钓鱼的必要行为，不是 bug
+- 应用状态必须为 `enabled`，`pending` / `disabled` 一律拒绝授权
+
+### 10.4 完整流程
+
+**① 把用户跳到授权页**
+
+```
+GET /oauth/authorize
+  ?client_id=app_xxxx
+  &redirect_uri=https://your-app.com/callback
+  &response_type=code
+  &scope=openid%20profile%20email
+  &state=<随机串，防 CSRF，原样回传>
+  &nonce=<随机串，防重放，会写进 id_token>
+  &code_challenge=<PKCE，可选>
+  &code_challenge_method=S256
+  &prompt=consent        # 可选：强制重新确认，不加则老用户免打扰直通
+```
+
+用户未登录会先跳登录页，登录完自动跳回继续授权。用户确认后回跳：
+
+```
+https://your-app.com/callback?code=ac_xxxx&state=<原样返回>
+```
+
+用户拒绝则回跳 `?error=access_denied&state=...`。**务必校验 `state` 与你发出的一致。**
+
+**② 用 code 换 token**（后端发起，别放前端，会泄露 client_secret）
+
+```http
+POST /oauth/token
+Content-Type: application/json
+
+{
+  "grant_type":    "authorization_code",
+  "code":          "ac_xxxx",
+  "redirect_uri":  "https://your-app.com/callback",
+  "client_id":     "app_xxxx",
+  "client_secret": "cs_xxxx",
+  "code_verifier": "<用了 PKCE 才需要>"
+}
+```
+
+```json
+{
+  "access_token": "at_xxxx",
+  "token_type":   "Bearer",
+  "expires_in":   7200,
+  "scope":        "openid profile",
+  "id_token":     "eyJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+> ⚠️ 返回的 `scope` **可能比你申请的少**——用户取消勾选了可选项。请按实际返回值处理，
+> 不要假设申请什么就一定拿到什么。
+
+**③ 验证 id_token 或调 userinfo**
+
+`id_token` 用 `client_secret` 以 HS256 验签，必须校验 `iss`、`aud`、`exp`、`nonce`。
+或者直接调：
+
+```http
+GET /oauth/userinfo
+Authorization: Bearer at_xxxx
+```
+
+**④ 登出时吊销令牌**（可选）
+
+```http
+POST /oauth/revoke      { "token": "at_xxxx" }
+```
+
+### 10.5 令牌与授权的生命周期
+
+- 授权码：**10 分钟**过期，**只能用一次**，重复使用直接拒绝（并且会作废该用户在此应用下所有未使用的码）
+- 访问令牌：**2 小时**过期
+- 用户在「控制台 → 我的授权」撤销授权后，**已发出的令牌立即失效**，`userinfo` 返回 `403 insufficient_scope`
+- 用户账号被停用后，令牌同样立即失效
+
+### 10.6 错误码
+
+| error | 含义 |
+|---|---|
+| `invalid_client` | `client_id` 不存在，或 `client_secret` 不正确 |
+| `invalid_request` | `redirect_uri` 未登记、参数缺失 |
+| `invalid_grant` | 授权码无效/过期/已用过，或 PKCE 校验失败，或 `redirect_uri` 与授权时不一致 |
+| `unsupported_response_type` | 只支持 `response_type=code` |
+| `access_denied` | 用户拒绝授权，或应用未启用 |
+| `invalid_token` | 访问令牌无效或已过期 |
+| `insufficient_scope` | 用户已撤销授权 |

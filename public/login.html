@@ -1554,9 +1554,20 @@
     } catch(e) { showTip('register','error',e.message||'注册失败'); }
   }
 
+  // 登录后的去向：?next= 指定则跳回去（用于 OIDC 授权页登录后继续授权）。
+  // 只接受站内相对路径，防止被构造成开放重定向把 token 带去外站。
+  function safeNext() {
+    const n = new URLSearchParams(location.search).get('next');
+    if (!n || !n.startsWith('/') || n.startsWith('//')) return null;
+    return n;
+  }
+
   function redirect(token, user) {
     localStorage.setItem('sso_token', token);
     localStorage.setItem('sso_user', JSON.stringify(user));
+    const next = safeNext();
+    // 有 next 时跳过登录成功中间页，直接回到原流程
+    if (next) { window.location.replace(next); return; }
     window.location.href = '/login-success.html?token='+token+'&name='+encodeURIComponent(user.name||'');
   }
 
@@ -1592,7 +1603,7 @@
         const token = localStorage.getItem('sso_token');
         const res = await fetch('/api/user/me', { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
-          window.location.replace('/dashboard.html');
+          window.location.replace(safeNext() || '/dashboard.html');
           return;
         } else {
           // token 已失效，清除后留在登录页

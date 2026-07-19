@@ -35,7 +35,9 @@ server/
 ├── api.js        # 几乎所有 REST 接口都在这一个文件里（1700+ 行）
 ├── auth.js       # JWT 签发/验证 + requireAuth/requireAdmin/requireApiKey 中间件
 ├── db.js         # 唯一持有 Database 实例的地方，导出 { db, users, oauth, otp, ... } 等 prepared statement 集合
-├── oauth.js      # 13 个平台的 OAuth 回调路由
+├── oauth.js      # 【消费方】本系统去登录 13 个平台的 OAuth 回调路由
+├── provider.js   # 【提供方】第三方"用 QWQ SSO 登录"：OIDC 授权码流程 + PKCE
+│                 #   ⚠️ 和 oauth.js 方向相反，别搞混
 ├── sms.js        # 短信三服务商（火山引擎/阿里云/腾讯云）+ 轮询
 ├── email.js      # 邮件（Zeabur Email/SMTP）+ 轮询
 ├── kyc.js        # KYC 四服务商（Didit/Stripe/阿里云/火山引擎）+ 轮询
@@ -45,6 +47,7 @@ server/
 public/
 ├── login.html          # 登录页，动态显示已配置的登录平台
 ├── dashboard.html       # 用户端 + 管理端一体化控制台（巨型单文件）
+├── authorize.html       # OIDC 授权确认页（第三方登录时的"是否同意"界面）
 ├── login-success.html   # 登录成功中间页，5秒倒计时+Token验证展示
 └── setup.html            # 首次安装向导前端
 ```
@@ -158,7 +161,18 @@ if (hasEmailProvider) { /* 真发 */ } else { /* 只打印，响应体带 dev: t
 
 其他：`provider_stats`（三方服务商调用统计）、`api_call_logs`（入站/出站调用日志）、`user_levels`（等级管理）
 
+OIDC 相关（v3.3.0 新增）：`oauth_auth_codes`（授权码，10 分钟单次使用）、`oauth_access_tokens`（访问令牌，只存 sha256）、`user_app_auth.scope`（用户对该应用实际授权了哪些 scope）
+
 字段增补一律走 `db.js` 里的 `try { ALTER TABLE ... } catch(_) {}` 模式，**不要**假设某个字段一定存在，写查询时留意 `COALESCE` 或默认值兜底。
+
+### ⚠️ ALTER TABLE 必须写在建表语句「之后」
+
+这是 v3.3.0 修掉的一个存量 bug，务必注意：原先 18 条 `ALTER TABLE` 全部排在 `db.exec()` 建表块**之前**，
+全新数据库首次启动时表还不存在 → 所有 ALTER 被 `catch(_) {}` 静默吞掉 → 字段全部缺失；
+要等第二次启动（表已建好）才补上。表现为**首次安装后功能残缺、重启一次又自己好了**，极难排查。
+
+现在 `db.js` 有一个明确的「迁移」区块位于建表之后，**新增字段请加在那个区块里**，
+文件顶部只留了一行注释提醒不要往那儿加。
 
 ---
 
@@ -175,12 +189,40 @@ if (hasEmailProvider) { /* 真发 */ } else { /* 只打印，响应体带 dev: t
 
 ---
 
+## 第三方接入的两条路（v3.3.0 起）
+
+**别再把开放 API 当成"第三方登录"用**——它们解决的是不同问题：
+
+| | 开放 API（`/api/v1/*`） | OIDC 登录（`/oauth/*`） |
+|---|---|---|
+| 凭据 | `sk_live_` API Key | `client_id` + `client_secret` |
+| 用户参与 | 无，后台直接查库 | 有，跳转 + 授权确认页 |
+| 数据范围 | 管理员给的 scope | 用户逐项勾选同意的 scope |
+| 实现位置 | `api.js` | `provider.js` |
+
+v3.3.0 之前**只有前者**，所以"第三方登录"实际上是"第三方读库"——用户全程没参与。
+`apps` 表的 `client_id`/`client_secret`/`callback_url` 三个字段从很早就存在，但 `callback_url`
+在此之前**从未被任何代码读取过**，是纯装饰。
+
+设计要点（改动前先理解，别退回去）：
+- `id_token` 用 **HS256 + client_secret** 签名，故意不引入 RSA/JWKS，省掉密钥管理
+- `redirect_uri` 必须与 `apps.callback_url` **完全一致**，不匹配时**绝不回跳**（防钓鱼），直接 400
+- **最小化披露**：未授权的字段在 `id_token` 和 `userinfo` 里根本不出现，不是给 null
+- `kyc` scope 即使授权，姓名也只给脱敏结果（张三丰 → 张**），完整姓名永不下发
+- 撤销授权会连带吊销已发出的令牌（`api.js` 的 `DELETE /apps/:id/auth`）
+
+---
+
 ## 交接核查时新发现的问题（2026-07-20，均未擅自修改，待用户确认）
 
 1. 🔴 **`server/init.js` 硬编码了超级管理员明文密码**（第 15-17 行，`ADMIN_EMAIL` / `ADMIN_PASSWORD`）。仓库是公开的，这等于把线上超管凭据公开了。建议改成读 `INIT_ADMIN_EMAIL` / `INIT_ADMIN_PASSWORD` 环境变量，未配置时随机生成并打印一次；**并且要先去线上把这个账号的密码改掉**，改代码本身不能撤销已泄露的事实
 2. 🟡 **`server/store.js` 是死代码**。它是早期的内存版 Map 存储（用户/OTP/OAuth state），已被 `db.js` 的 SQLite 实现完全取代，全项目无任何文件 `require` 它。留着容易让后续开发者误用（它的字段名是 `passwordHash` 驼峰，和数据库的 `password_hash` 不一致，一旦误用会静默出错）。建议删除
 3. ✅ **版本号脱节已修复**（v3.2.4）。此前 tag 已走到 v3.2.3，但 `package.json` / `server/index.js` 页脚 / `README.md` 徽章都还停在 3.2.0——说明前几次发版只打 tag 没同步改代码。**发版时这四处必须一起改**：`package.json` 的 `version` / `server/index.js:130` 的 `versionLink` / `README.md` 标题 + 徽章 / 本文件开头的版本号
-4. 🟡 **`server/init.js` 的 `ENV_KEYS` 预置列表已经落后**。里面没有 Didit KYC、Zeabur Email（`ZEABUR_EMAIL_TOKEN`）、以及所有 `FOOTER_*` 相关的键。新增服务商时除了 `ENV_GROUPS`（`dashboard.html`），也要记得同步这个列表
+4. 🔴 **`db.js` 里有一行「每次启动作废所有 API Key」**（v3.3.0 已注释掉并加显眼标注，等确认后删除）。
+   原代码是 `UPDATE api_keys SET status='revoked' WHERE status='active'`，注释写着"一次性历史迁移"，
+   但它**没有任何条件保护，每次服务启动都会执行**——等于 Zeabur 每次部署后所有第三方密钥集体失效。
+   如果之前遇到过"API Key 老是莫名其妙失效"，原因就是它。确认后请直接删掉这几行注释代码
+5. 🟡 **`server/init.js` 的 `ENV_KEYS` 预置列表已经落后**。里面没有 Didit KYC、Zeabur Email（`ZEABUR_EMAIL_TOKEN`）、以及所有 `FOOTER_*` 相关的键。新增服务商时除了 `ENV_GROUPS`（`dashboard.html`），也要记得同步这个列表
 
 ---
 
