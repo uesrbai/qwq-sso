@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.0**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.1**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -254,4 +254,20 @@ v3.3.0 之前**只有前者**，所以"第三方登录"实际上是"第三方读
   git tag vX.Y.Z
   git push origin vX.Y.Z
   ```
-- 版本号规则：语义化三段式，用户明确要求过"第二位版本号加一级"、"改回某个版本号"等操作，说明版本号本身不完全跟随功能量级自动递增，而是用户手动决定的，**改版本号前先确认，不要自作主张递增**
+- **版本号规则（2026-07-20 用户明确，按此执行，不用每次再问）**：
+
+  | 段位 | 谁来决定 |
+  |---|---|
+  | 一级 `X.0.0` | **只有用户本人能改**，绝不主动动 |
+  | 二级 `3.X.0` | 可以提议，但要先问过用户 |
+  | 三级 `3.3.X` | **每次改动都加**，不用问 |
+  | 四级 `3.3.1.X` | 本次**只是打补丁修 bug** 时用第四段，而不是第三段 |
+
+  版本号要同步到**四处**：`package.json` 的 `version`、`server/index.js` 里 `versionLink` 的
+  `Powered by QWQ SSO vX.Y.Z`、`README.md` 标题 + 徽章、`CLAUDE.md` 开头的当前版本。
+  改完打 tag 并 `git push origin vX.Y.Z`。历史上出过只打 tag 不改代码导致脱节（tag 到 v3.2.3 而代码停在 3.2.0）。
+
+- ⚠️ **改文件一律用编辑器工具，不要用 PowerShell 的 `Get-Content`/`Set-Content` 做替换**：
+  本机是 Windows PowerShell 5.1，`Get-Content` 默认按 ANSI 代码页读取，读 UTF-8 中文文件会得到乱码，
+  再 `Set-Content -Encoding utf8` 写回就把整个文件毁了（README/CLAUDE.md/index.js 都是满篇中文，一改就炸）。
+  2026-07-20 踩过一次，靠 `git checkout --` 才救回来。
