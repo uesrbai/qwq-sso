@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.2.0**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.2.4**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -138,11 +138,11 @@ if (hasEmailProvider) { /* 真发 */ } else { /* 只打印，响应体带 dev: t
 - `index.js` 的 HTML 响应中间件用正则把占位符替换成 `buildFooterHtml()` 生成的真实内容
 - 版权行 `Copyright © 2026 QWQ INC.` 是**硬编码不可配置**的，分发人名称/链接来自 `FOOTER_DISTRIBUTOR` / `FOOTER_DISTRIBUTOR_URL` 环境变量
 - 其他页脚项目（备案号、许可证等）是**动态扫描**所有 `FOOTER_*` 环境变量渲染的，管理端有个"页脚信息管理"面板支持增删（生成变量名规则：`FOOTER_<自定义后缀>`，勾选超链接则额外生成 `FOOTER_<后缀>_URL`）
-- 版本号那行 `Powered by QWQ SSO v3.2.0` 链接指向 `https://github.com/uesrbai/qwq-sso`，**硬编码不可配置**
+- 版本号那行 `Powered by QWQ SSO v3.2.4` 链接指向 `https://github.com/uesrbai/qwq-sso`，**硬编码不可配置**
 
 **页脚位置的当前实际状态（2026-07-20 核实）**：`dashboard.html:1861` 的占位符包在 `<div id="site-footer-placeholder">` 里，位置在 `</div><!-- /content -->` **之前**，也就是已经是"功能内容区居底"那一版。`login.html:1637` 和 `login-success.html:358` 则是裸占位符放在页面末尾（这两个页面没有 `.content` 滚动容器，效果等同整页居底，符合预期）。
 
-⚠️ **`setup.html` 里根本没有 `__FOOTER_HTML__` 占位符**，所以首次安装向导页是没有页脚的。不确定是有意为之还是遗漏，改之前先问用户。
+（`setup.html` 早期漏埋了占位符导致安装向导页没页脚，v3.2.4 已补上，位置同样在 `</body>` 前。新增页面时记得别再漏。）
 
 ### 10. 系统配置页（原"环境变量"，已改名）
 
@@ -179,7 +179,7 @@ if (hasEmailProvider) { /* 真发 */ } else { /* 只打印，响应体带 dev: t
 
 1. 🔴 **`server/init.js` 硬编码了超级管理员明文密码**（第 15-17 行，`ADMIN_EMAIL` / `ADMIN_PASSWORD`）。仓库是公开的，这等于把线上超管凭据公开了。建议改成读 `INIT_ADMIN_EMAIL` / `INIT_ADMIN_PASSWORD` 环境变量，未配置时随机生成并打印一次；**并且要先去线上把这个账号的密码改掉**，改代码本身不能撤销已泄露的事实
 2. 🟡 **`server/store.js` 是死代码**。它是早期的内存版 Map 存储（用户/OTP/OAuth state），已被 `db.js` 的 SQLite 实现完全取代，全项目无任何文件 `require` 它。留着容易让后续开发者误用（它的字段名是 `passwordHash` 驼峰，和数据库的 `password_hash` 不一致，一旦误用会静默出错）。建议删除
-3. 🟡 **`README.md` 第 6 行的版本徽章还是 `version-3.0.0`**，而实际版本是 3.2.0（`package.json` 和 `index.js:130` 都是 3.2.0）。发版时容易漏改，建议后续每次改版本号时把这三处一起改：`package.json` / `server/index.js` 的 `versionLink` / `README.md` 徽章 + 标题
+3. ✅ **版本号脱节已修复**（v3.2.4）。此前 tag 已走到 v3.2.3，但 `package.json` / `server/index.js` 页脚 / `README.md` 徽章都还停在 3.2.0——说明前几次发版只打 tag 没同步改代码。**发版时这四处必须一起改**：`package.json` 的 `version` / `server/index.js:130` 的 `versionLink` / `README.md` 标题 + 徽章 / 本文件开头的版本号
 4. 🟡 **`server/init.js` 的 `ENV_KEYS` 预置列表已经落后**。里面没有 Didit KYC、Zeabur Email（`ZEABUR_EMAIL_TOKEN`）、以及所有 `FOOTER_*` 相关的键。新增服务商时除了 `ENV_GROUPS`（`dashboard.html`），也要记得同步这个列表
 
 ---

@@ -1,9 +1,9 @@
-# QWQ SSO — 统一登录系统 v3.2.0
+# QWQ SSO — 统一登录系统 v3.2.4
 
 > 多渠道登录 · 用户/管理控制台 · 积分商城 · KYC 实名认证 · 开放 API
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/uesrbai/qwq-sso)
+[![Version](https://img.shields.io/badge/version-3.2.4-blue.svg)](https://github.com/uesrbai/qwq-sso)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)](https://nodejs.org)
 
 ---
