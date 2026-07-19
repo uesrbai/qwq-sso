@@ -687,6 +687,11 @@
     .f select, .f input {
       width: 100%;
       height: 34px;
+      /* .f 是 column 方向的 flex 容器，输入框是 flex 项：
+         默认 flex-shrink:1 会让上面的 height:34px 在容器被压缩时失效
+         （验证码行就被压成过 17.6px，比同行的「获取」按钮矮一半）。
+         flex:none 保证高度是硬约束，而不是"建议值"。 */
+      flex: none;
       padding: 0 10px;
       background: var(--surface2);
       border: 1px solid var(--border);
