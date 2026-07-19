@@ -430,8 +430,8 @@ const _DEV_DB = (() => {
     { id:'l2', user_id:s.id, user_name:s.name, uid_seq:s.uid_seq, method:'邮箱密码', app_name:'本系统', ip:'127.0.0.1', user_agent:'Chrome Dev', status:'success', created_at:new Date(Date.now()-86400000).toISOString() },
   ];
   const mockApps = [
-    { id:'a1', name:'企业OA系统', icon:'📋', icon_bg:'#E8F4FF', description:'内部工单与审批', client_id:'app_oa_001', callback_url:'https://oa.example.com/cb', auth_users:342, status:'enabled', visible:1, userAuthed:true },
-    { id:'a2', name:'数据分析台', icon:'📊', icon_bg:'#F0FFED', description:'业务数据可视化', client_id:'app_bi_002', callback_url:'https://bi.example.com/cb', auth_users:218, status:'enabled', visible:1, userAuthed:false },
+    { id:'a1', name:'企业OA系统', icon:'📋', icon_bg:'#E8F4FF', description:'内部工单与审批', client_id:'app_oa_001', callback_url:'https://oa.example.com/cb', auth_users:342, status:'enabled', visible:1, userAuthed:true, granted_scope:'openid profile email', authed_at:'2026-03-12 09:40:00' },
+    { id:'a2', name:'数据分析台', icon:'📊', icon_bg:'#F0FFED', description:'业务数据可视化', client_id:'app_bi_002', callback_url:'https://bi.example.com/cb', auth_users:218, status:'enabled', visible:1, userAuthed:false, granted_scope:'openid profile', authed_at:null },
   ];
 
   return { myUser, mockUsers, mockGoods, mockLogs, mockApps, isAdmin };
@@ -580,6 +580,11 @@ function _devApi(method, path, body) {
 
 // 格式化 uid_seq 为 5位编号
 function fmtUid(seq) { return seq ? String(seq).padStart(5,'0') : '—'; }
+
+// HTML 转义：拼接 innerHTML 时用于用户可控/管理员可控的文本
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 // 格式化时间
 function fmtTime(s) { if (!s) return '—'; return s.replace('T',' ').slice(0,16); }
 
@@ -2642,7 +2647,9 @@ async function renderMarket() {
       <div style="display:flex;align-items:center;justify-content:space-between;">
         ${a.userAuthed
           ? `<span class="badge ok">已授权</span><button class="btn" style="font-size:11px;padding:4px 10px;">管理</button>`
-          : `<span class="badge grey">未授权</span><button class="btn primary" style="font-size:11px;padding:4px 10px;" onclick="userAuthApp('${a.id}')">授权</button>`}
+          : `<span class="badge grey">未授权</span><button class="btn primary" style="font-size:11px;padding:4px 10px;"
+               data-cid="${esc(a.client_id)}" data-cb="${esc((a.callback_url||'').split(',')[0].trim())}"
+               onclick="userAuthApp(this.dataset.cid, this.dataset.cb)">前往授权</button>`}
       </div>
     </div>`).join('') +
     (ME && (ME.role === 'admin' || (ME.user_level <= 2)) ? `
@@ -2683,10 +2690,20 @@ async function submitApplyApp() {
   else showToast('⚠️ ' + (data.error || '提交失败'));
 }
 
-async function userAuthApp(id) {
-  const { ok, data } = await api('POST', `/apps/${id}/auth`);
-  if (ok) { renderMarket(); showToast('✓ 授权成功'); }
-  else showToast('⚠️ ' + (data.error||'授权失败'));
+// 走标准 OIDC 流程：跳授权确认页，由用户逐项确认要交出哪些数据。
+// v3.3.0 之前这里是 POST /apps/:id/auth，不经任何确认就直接记一条授权，
+// 既没有确认页也没有 scope 概念——那个接口现在只保留给老数据兼容。
+function userAuthApp(clientId, callbackUrl) {
+  if (_IS_DEV) { showToast('演示模式不执行真实授权跳转'); return; }
+  if (!clientId || !callbackUrl) { showToast('⚠️ 该应用未配置 client_id 或回调地址'); return; }
+  const q = new URLSearchParams({
+    client_id:     clientId,
+    redirect_uri:  callbackUrl,
+    response_type: 'code',
+    scope:         'openid profile',   // 市场入口只申请最小集，应用需要更多会自己带 scope 发起
+    state:         Math.random().toString(36).slice(2) + Date.now().toString(36),
+  });
+  location.href = '/oauth/authorize?' + q;
 }
 
 // ── 已授权应用 ──
@@ -4741,6 +4758,15 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════
 // 已授权应用：动态渲染 + 撤销授权
 // ══════════════════════════════════════════
+// scope 展示文案（与 server/provider.js 的 SCOPES 保持一致，改一边记得改另一边）
+const SCOPE_LABELS = {
+  openid:  { label: '身份标识',     descr: '仅唯一标识，不含个人资料' },
+  profile: { label: '基本资料',     descr: '昵称、头像、UID、等级' },
+  email:   { label: '邮箱地址',     descr: '你绑定的邮箱' },
+  phone:   { label: '手机号',       descr: '你绑定的手机号' },
+  kyc:     { label: '实名认证状态', descr: '是否已实名、姓名（脱敏）、证件号后四位', sensitive: true },
+};
+
 async function loadAuthedApps() {
   const el = document.getElementById('authed-apps-list');
   if (!el) return;
@@ -4749,19 +4775,37 @@ async function loadAuthedApps() {
     el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--txd);">暂无已授权应用</div>';
     return;
   }
-  el.innerHTML = data.apps.map(a => `
+  el.innerHTML = data.apps.map(a => {
+    // granted_scope 由 OIDC 授权流程写入；老数据（v3.3.0 之前的记账式授权）可能为空
+    const scopes = (a.granted_scope || '').split(' ').filter(Boolean);
+    const chips = scopes.length
+      ? scopes.map(s => {
+          const m = SCOPE_LABELS[s] || { label: s, descr: '' };
+          return `<span title="${esc(m.descr)}" style="display:inline-block;font-size:11px;padding:3px 8px;border-radius:6px;margin:0 5px 5px 0;
+            background:${m.sensitive ? 'rgba(255,149,0,.14)' : 'var(--sf2)'};
+            color:${m.sensitive ? '#B26A00' : 'var(--txm)'};">${esc(m.label)}${m.sensitive ? ' ⚠' : ''}</span>`;
+        }).join('')
+      : `<span style="font-size:11.5px;color:var(--txd);">此授权早于 v3.3.0，未记录具体权限范围；撤销后重新授权即可看到明细</span>`;
+
+    return `
     <div class="card" style="margin-bottom:10px;">
       <div class="card-header">
-        <h3>${a.icon||'📦'} ${a.name}</h3>
+        <h3>${a.icon||'📦'} ${esc(a.name)}</h3>
         <button class="btn" style="color:var(--err);border-color:var(--err);font-size:11px;padding:4px 10px;"
-          onclick="confirmRevokeApp('${a.id}','${a.name}')">撤销授权</button>
+          data-app-id="${esc(a.id)}" data-app-name="${esc(a.name)}"
+          onclick="confirmRevokeApp(this.dataset.appId, this.dataset.appName)">撤销授权</button>
       </div>
-      <div class="card-body" style="font-size:12px;color:var(--txm);">Client ID：<code style="background:var(--sf2);padding:2px 6px;border-radius:2px;">${a.client_id}</code></div>
-    </div>`).join('');
+      <div class="card-body">
+        <div style="font-size:11.5px;color:var(--txd);margin-bottom:7px;">该应用可获取你的：</div>
+        <div>${chips}</div>
+        ${a.authed_at ? `<div style="font-size:11px;color:var(--txd);margin-top:8px;">授权于 ${esc(a.authed_at)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function confirmRevokeApp(id, name) {
-  if (!confirm(`确认撤销「${name}」的授权？\n撤销后该应用将无法通过 SSO 登录，需重新授权。`)) return;
+  if (!confirm(`确认撤销「${name}」的授权？\n\n该应用已持有的访问令牌会立即失效，无法再读取你的任何数据；\n下次登录该应用时需要重新授权。`)) return;
   const { ok } = await api('DELETE', `/apps/${id}/auth`);
   if (ok) { showToast(`✓ 已撤销「${name}」的授权`); loadAuthedApps(); renderMarket(); }
   else showToast('⚠️ 撤销失败');

@@ -95,7 +95,7 @@ function fail(msg) { card.innerHTML = `<div class="err">${esc(msg)}</div>`; }
       <button class="no" id="deny">拒绝</button>
       <button class="ok" id="allow">同意授权</button>
     </div>
-    <div class="foot">授权后可随时在「控制台 → 我的授权」中撤销<br>取消勾选可选项不影响登录，但该应用可能功能受限</div>`;
+    <div class="foot">授权后可随时在「控制台 → 应用管理 → 已授权应用」中撤销<br>取消勾选可选项不影响登录，但该应用可能功能受限</div>`;
 
   const box = document.getElementById('scopes');
   d.scopes.forEach(s => {
