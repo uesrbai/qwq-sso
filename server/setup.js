@@ -37,9 +37,8 @@ router.post('/complete', async (req, res) => {
     site_name, base_url, node_env,
     // Step 3: 功能开关
     features,          // { sms, email, wechat, kyc, shop, api, ... }
-    // Step 4: 可选：短信/邮件快速配置
-    smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from,
-    sms_provider,
+    // Step 4: 可选：消息分发中心（QWQ Message）快速配置
+    qwq_message_url, qwq_message_key, qwq_message_sms_group, qwq_message_email_group,
   } = req.body;
 
   // 基础校验
@@ -106,20 +105,17 @@ router.post('/complete', async (req, res) => {
     };
     Object.entries(featureVars).forEach(([k, v]) => env.set.run(k, v));
 
-    // ── 4. 可选：快速配置 SMTP / SMS ──
-    if (feat.email && smtp_host) {
-      const smtpVars = {
-        SMTP_HOST:   smtp_host,
-        SMTP_PORT:   smtp_port  || '465',
-        SMTP_SECURE: smtp_secure || 'true',
-        SMTP_USER:   smtp_user  || '',
-        SMTP_PASS:   smtp_pass  || '',
-        SMTP_FROM:   smtp_from  || '',
+    // ── 4. 可选：快速配置消息分发中心 ──
+    // v3.3.3 起短信和邮件都走 QWQ Message，安装向导不再收集 SMTP / 短信服务商配置，
+    // 装完在「系统配置 → 消息分发（QWQ Message）」里填即可。
+    if ((feat.email || feat.sms) && qwq_message_url) {
+      const msgVars = {
+        QWQ_MESSAGE_URL:         qwq_message_url,
+        QWQ_MESSAGE_KEY:         qwq_message_key         || '',
+        QWQ_MESSAGE_SMS_GROUP:   qwq_message_sms_group   || '',
+        QWQ_MESSAGE_EMAIL_GROUP: qwq_message_email_group || '',
       };
-      Object.entries(smtpVars).forEach(([k, v]) => v && env.set.run(k, v));
-    }
-    if (feat.sms && sms_provider) {
-      env.set.run('SMS_PROVIDER', sms_provider);
+      Object.entries(msgVars).forEach(([k, v]) => v && env.set.run(k, v));
     }
 
     // ── 5. 锁定安装 ──

@@ -92,10 +92,11 @@ function verifyStripeWebhook(rawBody, signature, secret) {
 // 阿里云实人认证
 // ══════════════════════════════════════════════════════════
 async function verifyViaAliyunKYC(name, idNumber) {
-  const {
-    ALIYUN_ACCESS_KEY_ID: accessKeyId,
-    ALIYUN_ACCESS_KEY_SECRET: secretKey,
-  } = process.env;
+  // 优先用 KYC 专用 AK（管理端「KYC · 阿里云」面板填的就是这两个），
+  // 没配才回退到通用 AK。v3.3.3 之前只读通用 AK，导致面板里填的 KYC 专用密钥
+  // 从来没生效过，KYC 实际是在借用短信的凭据。
+  const accessKeyId = process.env.ALIYUN_KYC_ACCESS_KEY_ID     || process.env.ALIYUN_ACCESS_KEY_ID;
+  const secretKey   = process.env.ALIYUN_KYC_ACCESS_KEY_SECRET || process.env.ALIYUN_ACCESS_KEY_SECRET;
 
   const params = {
     AccessKeyId:       accessKeyId,
@@ -126,10 +127,9 @@ async function verifyViaAliyunKYC(name, idNumber) {
 // 火山引擎人脸核身
 // ══════════════════════════════════════════════════════════
 async function verifyViaVolcengineKYC(name, idNumber) {
-  const {
-    VOLCENGINE_ACCESS_KEY_ID: accessKeyId,
-    VOLCENGINE_ACCESS_KEY_SECRET: secretKey,
-  } = process.env;
+  // 同上：优先 KYC 专用 AK，回退通用 AK
+  const accessKeyId = process.env.VOLC_KYC_ACCESS_KEY_ID     || process.env.VOLCENGINE_ACCESS_KEY_ID;
+  const secretKey   = process.env.VOLC_KYC_ACCESS_KEY_SECRET || process.env.VOLCENGINE_ACCESS_KEY_SECRET;
 
   const host    = 'faceid.volcengineapi.com';
   const service = 'faceid';
@@ -213,12 +213,14 @@ async function verifyKycDirect(name, idNumber) {
   const providers = [
     {
       key:       'kyc_volcengine',
-      available: !!(e.VOLCENGINE_ACCESS_KEY_ID && e.VOLCENGINE_ACCESS_KEY_SECRET),
+      available: !!((e.VOLC_KYC_ACCESS_KEY_ID || e.VOLCENGINE_ACCESS_KEY_ID) &&
+                    (e.VOLC_KYC_ACCESS_KEY_SECRET || e.VOLCENGINE_ACCESS_KEY_SECRET)),
       fn:        () => verifyViaVolcengineKYC(name, idNumber),
     },
     {
       key:       'kyc_aliyun',
-      available: !!(e.ALIYUN_ACCESS_KEY_ID && e.ALIYUN_ACCESS_KEY_SECRET),
+      available: !!((e.ALIYUN_KYC_ACCESS_KEY_ID || e.ALIYUN_ACCESS_KEY_ID) &&
+                    (e.ALIYUN_KYC_ACCESS_KEY_SECRET || e.ALIYUN_ACCESS_KEY_SECRET)),
       fn:        () => verifyViaAliyunKYC(name, idNumber),
     },
   ];

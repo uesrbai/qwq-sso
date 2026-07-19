@@ -7,8 +7,8 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, apiKeys, env, points } = require('./db');
 const { signToken, requireAuth, requireAdmin, requireApiKey } = require('./auth');
-const { sendSmsCode } = require('./sms');
-const { sendEmailCode, sendEmail } = require('./email');
+// 短信与邮件统一走 QWQ Message 分发中心（v3.3.3 起不再直连服务商）
+const { sendSmsCode, sendEmailCode, sendEmail, isConfigured: hasMessageHub } = require('./message');
 
 const router = express.Router();
 const isEmail = s => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -80,13 +80,10 @@ router.post('/sms/send', async (req, res) => {
   otp.clean.run(Date.now());
   otp.set.run(`sms:${phone}`, code, Date.now() + expire * 1000);
 
-  const hasSmsProvider = !!(
-    (process.env.VOLCENGINE_ACCESS_KEY_ID && process.env.VOLCENGINE_SMS_TEMPLATE_ID) ||
-    (process.env.ALIYUN_ACCESS_KEY_ID && process.env.ALIYUN_SMS_TEMPLATE) ||
-    (process.env.TENCENT_SECRET_ID && process.env.TENCENT_SMS_TEMPLATE_ID)
-  );
+  // 是否真发：看分发中心是否已配置（不看 NODE_ENV，见 CLAUDE.md）
+  const hasSms = hasMessageHub();
 
-  if (hasSmsProvider) {
+  if (hasSms) {
     try {
       await sendSmsCode(phone, code);
     } catch (e) {
@@ -94,10 +91,10 @@ router.post('/sms/send', async (req, res) => {
       return res.status(500).json({ error: `短信发送失败：${e.message}` });
     }
   } else {
-    console.log(`[DEV SMS] 验证码 → ${phone} : ${code}（未配置短信服务商，仅打印）`);
+    console.log(`[DEV SMS] 验证码 → ${phone} : ${code}（未配置 QWQ Message，仅打印）`);
   }
 
-  res.json({ success: true, expires: expire, dev: !hasSmsProvider });
+  res.json({ success: true, expires: expire, dev: !hasSms });
 });
 
 router.post('/sms/verify', (req, res) => {
@@ -131,13 +128,10 @@ router.post('/email/send-code', async (req, res) => {
   const expire = parseInt(process.env.EMAIL_CODE_EXPIRE || '600');
   otp.set.run(`email:${email}`, code, Date.now() + expire * 1000);
 
-  // 检测是否配置了邮件服务商
-  const hasEmailProvider = !!(
-    process.env.ZEABUR_EMAIL_TOKEN ||
-    process.env.SMTP_HOST
-  );
+  // 是否真发：看分发中心是否已配置（不看 NODE_ENV，见 CLAUDE.md）
+  const hasEmail = hasMessageHub();
 
-  if (hasEmailProvider) {
+  if (hasEmail) {
     try {
       await sendEmailCode(email, code);
     } catch (e) {
@@ -145,11 +139,11 @@ router.post('/email/send-code', async (req, res) => {
       return res.status(500).json({ error: `邮件发送失败：${e.message}` });
     }
   } else {
-    // 未配置服务商：开发模式，打印到控制台
-    console.log(`[DEV EMAIL] 验证码 → ${email} : ${code}（未配置邮件服务商，仅打印）`);
+    // 未配置分发中心：开发模式，打印到控制台
+    console.log(`[DEV EMAIL] 验证码 → ${email} : ${code}（未配置 QWQ Message，仅打印）`);
   }
 
-  res.json({ success: true, expires: expire, dev: !hasEmailProvider });
+  res.json({ success: true, expires: expire, dev: !hasEmail });
 });
 
 router.post('/email/verify-code', (req, res) => {
@@ -558,26 +552,15 @@ router.post('/user/send-otp', requireAuth, async (req, res) => {
   const expire = parseInt(process.env[via === 'email' ? 'EMAIL_CODE_EXPIRE' : 'SMS_CODE_EXPIRE'] || (via === 'email' ? '600' : '300'));
   otp.set.run(`${via}:${target}`, code, Date.now() + expire * 1000);
 
-  if (via === 'email') {
-    const hasProvider = !!(process.env.ZEABUR_EMAIL_TOKEN || process.env.SMTP_HOST);
-    if (hasProvider) {
-      try { await sendEmailCode(target, code); }
-      catch (e) { return res.status(500).json({ error: `邮件发送失败：${e.message}` }); }
-    } else {
-      console.log(`[DEV EMAIL OTP] ${target} → ${code}`);
+  if (hasMessageHub()) {
+    try {
+      if (via === 'email') await sendEmailCode(target, code);
+      else                 await sendSmsCode(target, code);
+    } catch (e) {
+      return res.status(500).json({ error: `${via === 'email' ? '邮件' : '短信'}发送失败：${e.message}` });
     }
   } else {
-    const hasProvider = !!(
-      (process.env.VOLCENGINE_ACCESS_KEY_ID && process.env.VOLCENGINE_SMS_TEMPLATE_ID) ||
-      (process.env.ALIYUN_ACCESS_KEY_ID && process.env.ALIYUN_SMS_TEMPLATE) ||
-      (process.env.TENCENT_SECRET_ID && process.env.TENCENT_SMS_TEMPLATE_ID)
-    );
-    if (hasProvider) {
-      try { await sendSmsCode(target, code); }
-      catch (e) { return res.status(500).json({ error: `短信发送失败：${e.message}` }); }
-    } else {
-      console.log(`[DEV SMS OTP] ${target} → ${code}`);
-    }
+    console.log(`[DEV ${via === 'email' ? 'EMAIL' : 'SMS'} OTP] ${target} → ${code}`);
   }
 
   res.json({ success: true, expires: expire });

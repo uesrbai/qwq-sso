@@ -1,9 +1,9 @@
-# QWQ SSO — 统一登录系统 v3.3.2.1
+# QWQ SSO — 统一登录系统 v3.3.3
 
 > 多渠道登录 · 用户/管理控制台 · 积分商城 · KYC 实名认证 · 开放 API · OIDC 身份提供方
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.3.2.1-blue.svg)](https://github.com/uesrbai/qwq-sso)
+[![Version](https://img.shields.io/badge/version-3.3.3-blue.svg)](https://github.com/uesrbai/qwq-sso)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen.svg)](https://nodejs.org)
 
 ---
@@ -41,10 +41,10 @@
 - **等级管理**：普通用户/管理员两组等级，支持任意等级新增/编辑/删除（等级下有用户时禁止删除），用户等级以 `U数字`/`A数字`（如 U3、A1）标识符暴露给 API，管理端等级列表不直接展示该标识符
 - **公告发布**：富文本编辑器（粗体/斜体/字号/图片/链接/视频），支持 API 发布
 
-### 三方服务商轮询
-- **短信**：火山引擎 / 阿里云 / 腾讯云（自动检测已配置服务商）
-- **邮件**：Zeabur Email / SMTP（支持多 SMTP 轮询）
-- **KYC**：Didit（每月 500 次免费）/ Stripe Identity / 阿里云 / 火山引擎
+### 消息发送
+- **短信 / 邮件**：统一通过 [QWQ Message](https://github.com/uesrbai/qwq-message) 分发中心发送，
+  本系统不直接对接服务商；服务商账号、模板、轮询与故障转移都在分发中心配置
+- **KYC 轮询**：Didit（每月 500 次免费）/ Stripe Identity / 阿里云 / 火山引擎
 - **策略**：最少调用优先 / 顺序优先 / 只开放一个 / 用户自选
 
 ### 页脚与版权
@@ -89,8 +89,7 @@ npm start
 │   ├── auth.js       # JWT 鉴权 + requireAuth/Admin/ApiKey
 │   ├── db.js         # SQLite 数据库层（better-sqlite3）
 │   ├── oauth.js      # 13 个平台 OAuth 回调
-│   ├── sms.js        # 短信（火山引擎/阿里云/腾讯云 + 轮询）
-│   ├── email.js      # 邮件（Zeabur Email/SMTP + 轮询）
+│   ├── message.js    # 短信 + 邮件（统一调 QWQ Message 分发中心）
 │   ├── kyc.js        # KYC（Didit/Stripe/阿里云/火山引擎 + 轮询）
 │   ├── poller.js     # 通用服务商轮询模块
 │   └── setup.js      # 安装向导后端
