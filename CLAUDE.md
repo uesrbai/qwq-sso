@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.2.4**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.0**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -218,10 +218,10 @@ v3.3.0 之前**只有前者**，所以"第三方登录"实际上是"第三方读
 1. 🔴 **`server/init.js` 硬编码了超级管理员明文密码**（第 15-17 行，`ADMIN_EMAIL` / `ADMIN_PASSWORD`）。仓库是公开的，这等于把线上超管凭据公开了。建议改成读 `INIT_ADMIN_EMAIL` / `INIT_ADMIN_PASSWORD` 环境变量，未配置时随机生成并打印一次；**并且要先去线上把这个账号的密码改掉**，改代码本身不能撤销已泄露的事实
 2. 🟡 **`server/store.js` 是死代码**。它是早期的内存版 Map 存储（用户/OTP/OAuth state），已被 `db.js` 的 SQLite 实现完全取代，全项目无任何文件 `require` 它。留着容易让后续开发者误用（它的字段名是 `passwordHash` 驼峰，和数据库的 `password_hash` 不一致，一旦误用会静默出错）。建议删除
 3. ✅ **版本号脱节已修复**（v3.2.4）。此前 tag 已走到 v3.2.3，但 `package.json` / `server/index.js` 页脚 / `README.md` 徽章都还停在 3.2.0——说明前几次发版只打 tag 没同步改代码。**发版时这四处必须一起改**：`package.json` 的 `version` / `server/index.js:130` 的 `versionLink` / `README.md` 标题 + 徽章 / 本文件开头的版本号
-4. 🔴 **`db.js` 里有一行「每次启动作废所有 API Key」**（v3.3.0 已注释掉并加显眼标注，等确认后删除）。
-   原代码是 `UPDATE api_keys SET status='revoked' WHERE status='active'`，注释写着"一次性历史迁移"，
-   但它**没有任何条件保护，每次服务启动都会执行**——等于 Zeabur 每次部署后所有第三方密钥集体失效。
-   如果之前遇到过"API Key 老是莫名其妙失效"，原因就是它。确认后请直接删掉这几行注释代码
+4. ✅ **「每次启动作废所有 API Key」已删除**（v3.3.0）。原代码 `UPDATE api_keys SET status='revoked'
+   WHERE status='active'` 注释标称"一次性历史迁移"，实际没有任何条件保护、每次启动都执行——
+   Zeabur 每次部署都重启，等于每次发版所有第三方密钥集体失效。这就是"API Key 老是莫名其妙失效"的原因。
+   **将来若真需要一次性迁移，必须带版本标记，不要写成无条件语句**
 5. 🟡 **`server/init.js` 的 `ENV_KEYS` 预置列表已经落后**。里面没有 Didit KYC、Zeabur Email（`ZEABUR_EMAIL_TOKEN`）、以及所有 `FOOTER_*` 相关的键。新增服务商时除了 `ENV_GROUPS`（`dashboard.html`），也要记得同步这个列表
 
 ---

@@ -224,11 +224,10 @@ try { db.exec('ALTER TABLE shop_goods ADD COLUMN is_blind_box INTEGER NOT NULL D
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN open_instantly INTEGER NOT NULL DEFAULT 1'); } catch(_) {}
 try { db.exec("ALTER TABLE apps ADD COLUMN status TEXT NOT NULL DEFAULT 'enabled'"); } catch(_) {}
 
-// ⚠️⚠️ 待确认：下面这行原本在迁移区，注释写着「一次性历史迁移」，但它没有任何
-// 条件保护，等于「每次服务启动都把所有 active 的 API Key 全部作废」。
-// Zeabur 每次部署都会重启，也就是每次发版所有第三方密钥集体失效。
-// 暂按原样保留以免擅自改变线上行为，请确认后删除：
-// try { db.exec("UPDATE api_keys SET status='revoked' WHERE status='active'"); } catch(_) {}
+// 注：这里曾有一行 UPDATE api_keys SET status='revoked' WHERE status='active'，
+// 注释标称「一次性历史迁移」，实际没有任何条件保护，等于每次服务启动都作废全部密钥
+// （Zeabur 每次部署都重启 → 每次发版第三方密钥集体失效）。v3.3.0 已删除。
+// 若将来真需要一次性迁移，请用带版本标记的方式，不要写成无条件语句。
 
 // ──────────────────────────────────────────
 // 辅助：生成 uid_seq
