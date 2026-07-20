@@ -3521,7 +3521,8 @@ const ENV_GROUPS = [
       { key: 'QWQ_MESSAGE_KEY',         label: 'API 密钥',       desc: 'qwq_live_ 开头为生产密钥（支持 IP 白名单），qwq_test_ 为测试密钥', required: false, secret: true,  placeholder: 'qwq_live_xxxxxxxx',       value: '' },
       { key: 'QWQ_MESSAGE_SMS_GROUP',   label: '短信通道组',     desc: '分发中心里短信通道的 group 标识，如 sms-16',                      required: false, secret: false, placeholder: 'sms-16',                  value: '' },
       { key: 'QWQ_MESSAGE_EMAIL_GROUP', label: '邮件通道组',     desc: '分发中心里邮件通道的 group 标识，如 mail-1',                      required: false, secret: false, placeholder: 'mail-1',                  value: '' },
-      { key: 'QWQ_MESSAGE_SMS_TEMPLATE',label: '短信模板号',     desc: '可选。填了就走模板变量（变量名 code），不填则发纯文本',           required: false, secret: false, placeholder: 'SMS_123',                 value: '' },
+      { key: 'QWQ_MESSAGE_SMS_TEMPLATE',label: '短信模板号',     desc: '火山引擎/阿里云等服务商必须走已审核的模板，不填会发纯文本而被判「模板错误」',  required: false, secret: false, placeholder: 'SMS_123',                 value: '' },
+      { key: 'QWQ_MESSAGE_SMS_VAR',     label: '模板变量名',     desc: '模板里验证码占位符的名字，默认 code。若模板写的是 ${verifyCode} 就填 verifyCode，名字对不上同样报「模板错误」', required: false, secret: false, placeholder: 'code',                 value: '' },
       { key: 'SMS_CODE_EXPIRE',         label: '短信码有效期(秒)',desc: '短信验证码过期秒数，默认 300 秒（5分钟）',                       required: false, secret: false, placeholder: '300',                     value: '' },
     ]
   },

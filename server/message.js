@@ -13,6 +13,7 @@
  *   QWQ_MESSAGE_SMS_GROUP   短信通道组标识，如 sms-16
  *   QWQ_MESSAGE_EMAIL_GROUP 邮件通道组标识，如 mail-1
  *   QWQ_MESSAGE_SMS_TEMPLATE  （可选）短信模板号，走模板变量而非纯文本时填
+ *   QWQ_MESSAGE_SMS_VAR       （可选）模板里验证码占位符的变量名，默认 code
  *
  * ⚠️ 沿用项目既有约定：是否真实发送**不看 NODE_ENV**，
  *    而是看分发中心是否已配置（isConfigured()）。未配置就只打印到控制台。
@@ -38,6 +39,49 @@ function buildEndpoint(raw) {
     .replace(/\/api\/v1\/send$/i, '')    // 去掉已经带上的端点路径
     .replace(/\/+$/, '');
   return `${base}/api/v1/send`;
+}
+
+/**
+ * 从错误响应里提炼出人能看懂的原因。
+ *
+ * 分发中心失败时经常直接把上游服务商的原始响应透传回来，形如：
+ *   {"ResponseMetadata":{...,"Error":{"Code":"RE:0005","Message":"模板错误"}},...}
+ * 早期实现只认顶层 detail/error/message，取不到就把整个 JSON 原样抛出，
+ * 结果管理员看到的是一大坨看不懂的东西。这里逐层往下找真正的错因。
+ */
+const PROVIDER_HINTS = {
+  'RE:0005': '短信模板有问题：模板号不存在/未审核通过，或模板变量名与实际发送的对不上。' +
+             '请核对分发中心该通道配置的模板，以及本系统的 QWQ_MESSAGE_SMS_TEMPLATE / QWQ_MESSAGE_SMS_VAR',
+  'RE:0004': '短信签名有问题：签名未审核通过或与模板不匹配',
+};
+
+function describeError(body, text, status) {
+  if (!body || typeof body !== 'object') return text || `HTTP ${status}`;
+
+  // detail 有时本身又是一段 JSON 字符串，先尝试展开
+  let detail = body.detail;
+  if (typeof detail === 'string' && /^\s*[{[]/.test(detail)) {
+    try { detail = JSON.parse(detail); } catch (_) { /* 保持原样 */ }
+  }
+
+  // 逐个候选位置找服务商的错误对象（火山/阿里/腾讯的形状各不相同）
+  const candidates = [detail, body, body.result, body.Result];
+  for (const c of candidates) {
+    if (!c || typeof c !== 'object') continue;
+    const err = c.Error || c.error || c.ResponseMetadata?.Error;
+    if (err && (err.Message || err.Code)) {
+      const code = err.Code || err.code;
+      const msg  = err.Message || err.message || '';
+      const hint = code && PROVIDER_HINTS[code] ? `。${PROVIDER_HINTS[code]}` : '';
+      return `${msg}${code ? `（服务商错误码 ${code}）` : ''}${hint}`;
+    }
+  }
+
+  // 退回到各种常见的平铺字段
+  for (const v of [detail, body.error, body.message, body.msg, body.Message]) {
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  return text || `HTTP ${status}`;
 }
 
 /** 调用分发中心的 /api/v1/send */
@@ -82,8 +126,7 @@ async function dispatch(payload) {
 
   if (!res.ok || body.success === false) {
     recordCall(PROVIDER_KEY, false);
-    const detail = body.detail || body.error || body.message || text || `HTTP ${res.status}`;
-    throw new Error(`QWQ Message 发送失败 (${res.status})：${detail}`);
+    throw new Error(`QWQ Message 发送失败 (${res.status})：${describeError(body, text, res.status)}`);
   }
 
   recordCall(PROVIDER_KEY, true);
@@ -133,11 +176,14 @@ async function sendSmsCode(phone, codeOrText) {
 
   const payload = { group, to: phone, content: String(codeOrText) };
 
-  // 配了模板号就走模板变量，否则发纯文本
+  // 配了模板号就走模板变量，否则发纯文本。
+  // 变量名默认 code，但各家模板的占位符命名不一（${code} / ${1} / ${verifyCode}…），
+  // 名字对不上时服务商会直接报「模板错误」，所以做成可配置。
   const tpl = process.env.QWQ_MESSAGE_SMS_TEMPLATE;
   if (tpl) {
+    const varName = (process.env.QWQ_MESSAGE_SMS_VAR || 'code').trim();
     payload.templateCode = tpl;
-    payload.variables = { code: String(codeOrText) };
+    payload.variables = { [varName]: String(codeOrText) };
   }
   return dispatch(payload);
 }
