@@ -171,33 +171,83 @@ router.post('/email/verify-code', (req, res) => {
   res.json({ success: true, token, user: safeUser(user) });
 });
 
-// ── 邮箱密码 ──
-router.post('/email/register', async (req, res) => {
-  const { email, password, name } = req.body;
-  if (!email || !isEmail(email)) return res.status(400).json({ error: '邮箱格式不正确' });
-  const domainErr = checkEmailDomain(email);
-  if (domainErr) return res.status(403).json({ error: domainErr });
+// ── 账号密码注册/登录（邮箱或手机号均可）──
+async function handleRegister(req, res) {
+  const { email, phone, password, name } = req.body;
+
+  // 账号可以是邮箱或手机号。登录页「账号类型」选手机号时前端发的就是 phone，
+  // v3.3.3.2 之前这里只认 email，导致手机号注册必然报「邮箱格式不正确」。
+  const byPhone = !email && !!phone;
+  if (byPhone) {
+    if (!isPhone(phone)) return res.status(400).json({ error: '手机号格式不正确' });
+    if (users.findByPhone.get(phone)) return res.status(400).json({ error: '该手机号已注册' });
+  } else {
+    if (!email || !isEmail(email)) return res.status(400).json({ error: '邮箱格式不正确' });
+    const domainErr = checkEmailDomain(email);   // 域名策略只作用于邮箱
+    if (domainErr) return res.status(403).json({ error: domainErr });
+    if (users.findByEmail.get(email)) return res.status(400).json({ error: '该邮箱已注册' });
+  }
   if (!password || password.length < 6) return res.status(400).json({ error: '密码至少6位' });
-  if (users.findByEmail.get(email)) return res.status(400).json({ error: '该邮箱已注册' });
+
   const hash = await bcrypt.hash(password, 12); const seq = nextUidSeq(); const id = uuidv4();
-  users.insert.run({ id, uid_seq: seq, name: name || email.split('@')[0], email, phone: null, password_hash: hash, role: 'user', admin_level: null, user_level: 4, status: 'active' });
+  users.insert.run({
+    id, uid_seq: seq,
+    name: name || (byPhone ? `用户${String(phone).slice(-4)}` : email.split('@')[0]),
+    email: byPhone ? null : email,
+    phone: byPhone ? phone : null,
+    password_hash: hash, role: 'user', admin_level: null, user_level: 4, status: 'active',
+  });
   const user = users.findById.get(id);
   const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
   res.json({ success: true, token, user: safeUser(user) });
-});
+}
 
-router.post('/email/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: '请输入邮箱和密码' });
-  const user = users.findByEmail.get(email);
-  if (!user || !user.password_hash) { logLogin({ method: '邮箱密码', ip: req.ip, ua: req.headers['user-agent'], status: 'failed', failReason: '账号不存在' }); return res.status(401).json({ error: '邮箱或密码不正确' }); }
-  if (user.status === 'disabled') { logLogin({ userId: user.id, method: '邮箱密码', ip: req.ip, ua: req.headers['user-agent'], status: 'disabled' }); return res.status(403).json({ error: '账号已停用，请联系管理员' }); }
+router.post('/email/register',   handleRegister);   // 旧路径，保留兼容
+router.post('/account/register', handleRegister);   // 语义更准的别名
+
+// 账号密码登录：邮箱或手机号均可
+// （路径沿用 /email/login 是为了兼容既有调用方，实际不限邮箱；同时提供语义更准的别名）
+async function handlePasswordLogin(req, res) {
+  const { email, phone, password } = req.body;
+  const account = email || phone;
+  const byPhone = !email && !!phone;
+  const method  = byPhone ? '手机密码' : '邮箱密码';
+  const badMsg  = byPhone ? '手机号或密码不正确' : '邮箱或密码不正确';
+
+  if (!account || !password) {
+    return res.status(400).json({ error: `请输入${byPhone ? '手机号' : '邮箱'}和密码` });
+  }
+
+  const user = byPhone ? users.findByPhone.get(phone) : users.findByEmail.get(email);
+  const ua = req.headers['user-agent'];
+
+  if (!user) {
+    logLogin({ method, ip: req.ip, ua, status: 'failed', failReason: '账号不存在' });
+    return res.status(401).json({ error: badMsg });
+  }
+  // 验证码注册的账号没有密码，单独提示，否则用户会一直以为是密码记错了
+  if (!user.password_hash) {
+    logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method, ip: req.ip, ua, status: 'failed', failReason: '未设置密码' });
+    return res.status(401).json({ error: '该账号未设置密码，请改用验证码登录，登录后可在账号设定中设置密码' });
+  }
+  if (user.status === 'disabled') {
+    logLogin({ userId: user.id, method, ip: req.ip, ua, status: 'disabled' });
+    return res.status(403).json({ error: '账号已停用，请联系管理员' });
+  }
+
   const match = await bcrypt.compare(password, user.password_hash);
-  if (!match) { logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: '邮箱密码', ip: req.ip, ua: req.headers['user-agent'], status: 'failed', failReason: '密码错误' }); return res.status(401).json({ error: '邮箱或密码不正确' }); }
-  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: '邮箱密码', ip: req.ip, ua: req.headers['user-agent'] });
+  if (!match) {
+    logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method, ip: req.ip, ua, status: 'failed', failReason: '密码错误' });
+    return res.status(401).json({ error: badMsg });
+  }
+
+  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method, ip: req.ip, ua });
   const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
   res.json({ success: true, token, user: safeUser(user) });
-});
+}
+
+router.post('/email/login',   handlePasswordLogin);   // 旧路径，保留兼容
+router.post('/account/login', handlePasswordLogin);   // 语义更准的别名
 
 // ── 用户信息 ──
 // ── KYC 实名认证接口 ──

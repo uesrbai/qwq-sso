@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.1**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.2**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
