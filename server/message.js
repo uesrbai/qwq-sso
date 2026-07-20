@@ -8,6 +8,7 @@
  *
  * 需要配置的环境变量：
  *   QWQ_MESSAGE_URL         分发中心地址，如 https://msg.example.com
+ *                           （填成完整端点 .../api/v1/send 也可以，会自动去重）
  *   QWQ_MESSAGE_KEY         密钥，qwq_live_xxx（生产）或 qwq_test_xxx（测试）
  *   QWQ_MESSAGE_SMS_GROUP   短信通道组标识，如 sms-16
  *   QWQ_MESSAGE_EMAIL_GROUP 邮件通道组标识，如 mail-1
@@ -25,13 +26,38 @@ function isConfigured() {
   return !!(process.env.QWQ_MESSAGE_URL && process.env.QWQ_MESSAGE_KEY);
 }
 
+/**
+ * 组装发送端点。
+ * 管理员既可能填根地址（https://msg.example.com），也可能顺手把文档里的
+ * 完整端点粘进来（https://msg.example.com/api/v1/send）——后者如果再拼一次
+ * 就会变成 /api/v1/send/api/v1/send，所以这里统一把已有的端点后缀剥掉。
+ */
+function buildEndpoint(raw) {
+  const base = String(raw).trim()
+    .replace(/\/+$/, '')                 // 去掉结尾斜杠
+    .replace(/\/api\/v1\/send$/i, '')    // 去掉已经带上的端点路径
+    .replace(/\/+$/, '');
+  return `${base}/api/v1/send`;
+}
+
 /** 调用分发中心的 /api/v1/send */
 async function dispatch(payload) {
   if (!isConfigured()) {
     throw new Error('QWQ Message 未配置（需要 QWQ_MESSAGE_URL 和 QWQ_MESSAGE_KEY）');
   }
-  const base = process.env.QWQ_MESSAGE_URL.replace(/\/+$/, '');
-  const url  = `${base}/api/v1/send`;
+
+  // 密钥必须是纯 ASCII：HTTP 头不接受非 ASCII 字符，否则 fetch 会抛出
+  // "Cannot convert argument to a ByteString" 这种完全看不懂的底层错误。
+  // 最常见的原因是把管理端里打码显示的 '••••' 当成真密钥保存了。
+  const key = String(process.env.QWQ_MESSAGE_KEY);
+  if (/^[•*]+$/.test(key)) {
+    throw new Error('QWQ_MESSAGE_KEY 是一串掩码字符（••••），说明保存时把打码显示值当成了真实密钥。请到「系统配置 → 消息分发」重新填写真实密钥');
+  }
+  if (/[^\x20-\x7E]/.test(key)) {
+    throw new Error('QWQ_MESSAGE_KEY 含有非 ASCII 字符，无法作为请求头发送，请检查是否复制到了多余内容');
+  }
+
+  const url = buildEndpoint(process.env.QWQ_MESSAGE_URL);
 
   let res, text;
   try {
@@ -39,7 +65,7 @@ async function dispatch(payload) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.QWQ_MESSAGE_KEY}`,
+        Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(15000),

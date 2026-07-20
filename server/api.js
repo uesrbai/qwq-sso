@@ -841,14 +841,26 @@ router.get('/admin/env', requireAdmin(1), (req, res) => {
 router.post('/admin/env', requireAdmin(1), (req, res) => {
   const { vars } = req.body;
   if (!vars || typeof vars !== 'object') return res.status(400).json({ error: '参数错误' });
+
+  // 兜底防护：前端 secret 字段未展开时显示的是一串圆点（U+2022），
+  // 历史上曾因直接提交输入框内容而把已存密钥整体覆盖成圆点。
+  // 圆点串不可能是任何真实配置值，一律拒绝写入。
+  const skipped = [];
   Object.entries(vars).forEach(([k, v]) => {
-    env.set.run(k, String(v ?? ''));
+    const val = String(v ?? '');
+    if (val.length && /^[•]+$/.test(val)) { skipped.push(k); return; }
+
+    env.set.run(k, val);
     // 同步到当前进程环境变量，立即生效（无需重启）
-    if (v !== undefined && v !== null && String(v).trim()) {
-      process.env[k] = String(v);
-    }
+    if (val.trim()) process.env[k] = val;
   });
-  res.json({ success: true, message: '环境变量已保存并立即生效' });
+
+  if (skipped.length) console.warn(`[ENV] 已忽略 ${skipped.length} 个打码占位值：${skipped.join(', ')}`);
+  res.json({
+    success: true,
+    message: '环境变量已保存并立即生效',
+    ...(skipped.length ? { skipped } : {}),
+  });
 });
 
 // ── 开放 API（第三方 API Key 调用）──

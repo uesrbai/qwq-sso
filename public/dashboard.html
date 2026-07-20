@@ -3113,6 +3113,8 @@ async function saveApiKey() {
 async function renderEnvPage() {
   const { ok, data } = await api('GET', '/admin/env');
   if (!ok) return;
+  // 从服务端重新载入 → 所有字段回到「未编辑」状态
+  ENV_GROUPS.forEach(g => g.vars.forEach(v => { v.dirty = false; }));
   // 把数据库中的值同步到 ENV_GROUPS
   Object.entries(data.env).forEach(([k,v]) => {
     for (const g of ENV_GROUPS) {
@@ -3234,16 +3236,28 @@ function filterEnvGroupIn(cat, groupKey) {
   renderEnvCards();
 }
 
+// 判断一个值是不是「打码占位符」而非真实内容。
+// secret 字段未展开时输入框里装的是 '•'.repeat(n)，绝不能把它当成真值提交。
+const isMaskedValue = s => typeof s === 'string' && s.length > 0 && /^[•]+$/.test(s);
+
 async function saveAllEnv() {
   const vars = {};
   // 只提交当前页面里有值的变量（避免把未展示的变量的空值覆盖掉已有配置）
   ENV_GROUPS.forEach(g => g.vars.forEach(v => {
     const inputEl = document.getElementById('envinput-' + v.key);
     const currentVal = inputEl ? inputEl.value : v.value;
-    if (currentVal !== undefined && currentVal !== null) {
-      vars[v.key] = currentVal; // 空字符串也提交（用于清除配置）
-    }
+    if (currentVal === undefined || currentVal === null) return;
+
+    // ⚠️ 曾经的严重 bug：这里直接提交 inputEl.value，而已配置的 secret 字段
+    // 显示的是一串圆点，于是「在系统配置页点一次保存」就会把所有已存的密钥
+    // （微信 AppSecret / JWT_SECRET / 各家 KYC 密钥…）统统覆盖成圆点。
+    // 现在：没被用户改动过的 secret 字段一律跳过，打码值也一律跳过。
+    if (isMaskedValue(currentVal)) return;
+    if (v.secret && !v.dirty) return;
+
+    vars[v.key] = currentVal; // 空字符串也提交（用于清除配置）
   }));
+  if (!Object.keys(vars).length) { showToast('没有需要保存的改动'); return; }
   const { ok, data } = await api('POST', '/admin/env', { vars });
   if (ok) {
     showToast(`✓ 已保存 ${Object.keys(vars).length} 个环境变量，立即生效`);
@@ -3719,7 +3733,9 @@ function toggleEnvSecret(key) {
 function onEnvInput(key, val) {
   for(const g of ENV_GROUPS) {
     const v = g.vars.find(v=>v.key===key);
-    if(v) { v.value = val; break; }
+    // dirty 标记：只有用户真正敲过的 secret 字段才会在保存时提交，
+    // 否则未展开的密钥框里那串圆点会被当成新值写回去（见 saveAllEnv 的注释）
+    if(v) { v.value = val; v.dirty = true; break; }
   }
     // 实时更新状态徽章和输入框样式
     const input = document.getElementById('envinput-'+key);

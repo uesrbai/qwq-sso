@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.1**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -149,7 +149,23 @@ if (isConfigured()) { /* 真发 */ } else { /* 只打印，响应体带 dev: tru
 
 （`setup.html` 早期漏埋了占位符导致安装向导页没页脚，v3.2.4 已补上，位置同样在 `</body>` 前。新增页面时记得别再漏。）
 
-### 10. 系统配置页（原"环境变量"，已改名）
+### 10. ⚠️ secret 字段的掩码绝不能当成真值提交（v3.3.3.1 修复的严重 bug）
+
+管理端「系统配置」里 `secret: true` 的字段，未点👁展开时输入框的 `value` 是
+`'•'.repeat(n)`（`dashboard.html` 渲染处）。而 `saveAllEnv()` 原本直接读 `inputEl.value` 提交——
+**结果是在系统配置页点一次保存，所有已配置的密钥会被整串圆点覆盖**：
+微信/飞书/钉钉 AppSecret、`JWT_SECRET`、各家 KYC 密钥、`QWQ_MESSAGE_KEY` 全部报废。
+症状极具迷惑性：页面上依然显示「已配置」，但实际发请求时报
+`Cannot convert argument to a ByteString ... value of 8226`（8226 就是 `•`）。
+
+现在有三道防线，改动这块时不要拆掉任何一道：
+1. `onEnvInput()` 给字段打 `v.dirty = true`，`saveAllEnv()` **只提交被用户真正改过的 secret 字段**
+2. `saveAllEnv()` 里 `isMaskedValue()` 拦截纯圆点串
+3. 后端 `POST /admin/env` 再判一次，圆点串一律拒绝写入并记 warn
+
+`renderEnvPage()` 从服务端重新载入时会把所有 `dirty` 复位。
+
+### 11. 系统配置页（原"环境变量"，已改名）
 
 管理端左侧菜单「环境变量」已重命名为「系统配置」。这个页面的 UI 结构是**左侧竖排分类导航（模仿主菜单栏风格）+ 右侧配置卡片**，不是早期版本的顶部横向 tab。一级分类（三方登录/消息通知/实名认证/支付/系统与页脚）点击可展开二级子菜单（具体到每个服务商）。`ENV_GROUPS` 数组里每一项现在都带 `category` 字段用于分类归属，新增服务商配置时要记得打上正确的 category。
 
