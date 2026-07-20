@@ -3521,7 +3521,8 @@ const ENV_GROUPS = [
       { key: 'QWQ_MESSAGE_KEY',         label: 'API 密钥',       desc: 'qwq_live_ 开头为生产密钥（支持 IP 白名单），qwq_test_ 为测试密钥', required: false, secret: true,  placeholder: 'qwq_live_xxxxxxxx',       value: '' },
       { key: 'QWQ_MESSAGE_SMS_GROUP',   label: '短信通道组',     desc: '分发中心里短信通道的 group 标识，如 sms-16',                      required: false, secret: false, placeholder: 'sms-16',                  value: '' },
       { key: 'QWQ_MESSAGE_EMAIL_GROUP', label: '邮件通道组',     desc: '分发中心里邮件通道的 group 标识，如 mail-1',                      required: false, secret: false, placeholder: 'mail-1',                  value: '' },
-      { key: 'QWQ_MESSAGE_SMS_TEMPLATE',label: '短信模板号',     desc: '火山引擎/阿里云等服务商必须走已审核的模板，不填会发纯文本而被判「模板错误」',  required: false, secret: false, placeholder: 'SMS_123',                 value: '' },
+      { key: 'QWQ_MESSAGE_SMS_HUB_TEMPLATE', label: '自建模板编号', desc: '⭐推荐。分发中心「模板管理」里自己创建的那条模板的编号，如 sso-sms-code。填这个即可，无需再填下面的服务商模板号', required: false, secret: false, placeholder: 'sso-sms-code',   value: '' },
+      { key: 'QWQ_MESSAGE_SMS_TEMPLATE',label: '服务商模板号',   desc: '⚠️ 与上面是两回事：这里填服务商后台（如火山引擎控制台）已审核通过的模板 ID。把自建模板编号填到这里会被服务商判「模板错误」。两者二选一，自建模板优先',  required: false, secret: false, placeholder: 'ST_xxxxxxxx',  value: '' },
       { key: 'QWQ_MESSAGE_SMS_VAR',     label: '模板变量名',     desc: '模板里验证码占位符的名字，默认 code。若模板写的是 ${verifyCode} 就填 verifyCode，名字对不上同样报「模板错误」', required: false, secret: false, placeholder: 'code',                 value: '' },
       { key: 'SMS_CODE_EXPIRE',         label: '短信码有效期(秒)',desc: '短信验证码过期秒数，默认 300 秒（5分钟）',                       required: false, secret: false, placeholder: '300',                     value: '' },
     ]

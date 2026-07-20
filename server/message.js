@@ -12,8 +12,10 @@
  *   QWQ_MESSAGE_KEY         密钥，qwq_live_xxx（生产）或 qwq_test_xxx（测试）
  *   QWQ_MESSAGE_SMS_GROUP   短信通道组标识，如 sms-16
  *   QWQ_MESSAGE_EMAIL_GROUP 邮件通道组标识，如 mail-1
- *   QWQ_MESSAGE_SMS_TEMPLATE  （可选）短信模板号，走模板变量而非纯文本时填
- *   QWQ_MESSAGE_SMS_VAR       （可选）模板里验证码占位符的变量名，默认 code
+ *   QWQ_MESSAGE_SMS_HUB_TEMPLATE （可选）分发中心「模板管理」里自建模板的编号，如 sso-sms-code
+ *   QWQ_MESSAGE_SMS_TEMPLATE     （可选）服务商后台已审核的模板号，如火山引擎的 ST_xxx
+ *                                 —— 这两个是不同的东西，二选一，自建模板优先
+ *   QWQ_MESSAGE_SMS_VAR          （可选）模板里验证码占位符的变量名，默认 code
  *
  * ⚠️ 沿用项目既有约定：是否真实发送**不看 NODE_ENV**，
  *    而是看分发中心是否已配置（isConfigured()）。未配置就只打印到控制台。
@@ -50,8 +52,10 @@ function buildEndpoint(raw) {
  * 结果管理员看到的是一大坨看不懂的东西。这里逐层往下找真正的错因。
  */
 const PROVIDER_HINTS = {
-  'RE:0005': '短信模板有问题：模板号不存在/未审核通过，或模板变量名与实际发送的对不上。' +
-             '请核对分发中心该通道配置的模板，以及本系统的 QWQ_MESSAGE_SMS_TEMPLATE / QWQ_MESSAGE_SMS_VAR',
+  'RE:0005': '短信模板有问题。最常见的原因是把「分发中心自建模板编号」填进了服务商模板号：' +
+             '自建模板（模板管理里创建的，如 sso-sms-code）要填 QWQ_MESSAGE_SMS_HUB_TEMPLATE，' +
+             '服务商后台已审核的模板号才填 QWQ_MESSAGE_SMS_TEMPLATE。' +
+             '其次检查模板变量名是否与 QWQ_MESSAGE_SMS_VAR 一致',
   'RE:0004': '短信签名有问题：签名未审核通过或与模板不匹配',
 };
 
@@ -176,14 +180,26 @@ async function sendSmsCode(phone, codeOrText) {
 
   const payload = { group, to: phone, content: String(codeOrText) };
 
-  // 配了模板号就走模板变量，否则发纯文本。
-  // 变量名默认 code，但各家模板的占位符命名不一（${code} / ${1} / ${verifyCode}…），
-  // 名字对不上时服务商会直接报「模板错误」，所以做成可配置。
-  const tpl = process.env.QWQ_MESSAGE_SMS_TEMPLATE;
-  if (tpl) {
+  // ⚠️ 分发中心有两套模板概念，字段不同，填错会直接被服务商拒掉：
+  //   template     = 分发中心「模板管理」里自建的模板（如 sso-sms-code）
+  //   templateCode = 服务商后台已审核的模板号（如火山引擎的 ST_xxx）
+  // 早期只实现了 templateCode，把自建模板的编号当成服务商模板号透传过去，
+  // 火山引擎因此报 RE:0005 模板错误。现在两者都支持，自建模板优先。
+  const hubTpl      = (process.env.QWQ_MESSAGE_SMS_HUB_TEMPLATE || '').trim();
+  const providerTpl = (process.env.QWQ_MESSAGE_SMS_TEMPLATE || '').trim();
+
+  if (hubTpl || providerTpl) {
     const varName = (process.env.QWQ_MESSAGE_SMS_VAR || 'code').trim();
-    payload.templateCode = tpl;
     payload.variables = { [varName]: String(codeOrText) };
+    if (hubTpl) {
+      payload.template = hubTpl;
+      if (providerTpl) {
+        console.warn('[QWQ Message] 同时配置了自建模板与服务商模板号，按自建模板发送；' +
+                     '如需走服务商模板请清空 QWQ_MESSAGE_SMS_HUB_TEMPLATE');
+      }
+    } else {
+      payload.templateCode = providerTpl;
+    }
   }
   return dispatch(payload);
 }

@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.3**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.4**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -238,7 +238,14 @@ Authorization: Bearer {QWQ_MESSAGE_KEY}
 | `QWQ_MESSAGE_KEY` | `qwq_live_`（生产，支持 IP 白名单）/ `qwq_test_`（测试） |
 | `QWQ_MESSAGE_SMS_GROUP` | 短信通道组标识 |
 | `QWQ_MESSAGE_EMAIL_GROUP` | 邮件通道组标识 |
-| `QWQ_MESSAGE_SMS_TEMPLATE` | 可选，填了走模板变量（变量名 `code`），不填发纯文本 |
+| `QWQ_MESSAGE_SMS_HUB_TEMPLATE` | 分发中心「模板管理」里**自建模板**的编号，走 `template` 字段 |
+| `QWQ_MESSAGE_SMS_TEMPLATE` | **服务商**后台已审核的模板号，走 `templateCode` 字段 |
+| `QWQ_MESSAGE_SMS_VAR` | 模板占位符变量名，默认 `code` |
+
+⚠️ **上面两个模板变量是完全不同的东西，这里踩过坑**：分发中心自建模板的编号
+（如 `sso-sms-code`）如果填进 `QWQ_MESSAGE_SMS_TEMPLATE`，会被当成服务商模板号
+原样透传给火山引擎/阿里云，对方查无此模板 → 报 `RE:0005 模板错误`。
+自建模板必须填 `QWQ_MESSAGE_SMS_HUB_TEMPLATE`。两者二选一，自建模板优先。
 
 要点：
 - **服务商账号、模板、轮询、故障转移全在分发中心那边**，本系统不再管这些。
