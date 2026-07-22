@@ -815,13 +815,24 @@ router.get('/admin/users/:id/logs', requireAdmin(3), (req, res) => {
 
 router.get('/admin/apps', requireAdmin(3), (req, res) => { res.json({ success: true, apps: apps.findAll.all() }); });
 router.post('/admin/apps', requireAdmin(2), (req, res) => {
-  const { name, icon='📦', icon_bg='#F0F0F0', description='', callback_url, visible=false } = req.body;
+  const { name, icon='📦', icon_bg='#F0F0F0', description='', callback_url, visible=false, status } = req.body;
   if (!name || !callback_url) return res.status(400).json({ error: '名称和回调地址必填' });
+  // 管理员自建应用时可直接启用；只有第三方通过申请入口提交的才默认待审核。
+  // 早期这里写死 'pending'，导致管理员选「直接启用」也不生效，应用一直无法用于 OIDC。
+  const initStatus = ['enabled', 'pending', 'disabled'].includes(status) ? status : 'enabled';
   const id = uuidv4();
   const client_id = 'app_' + crypto.randomBytes(6).toString('hex');
   const client_secret = crypto.randomBytes(32).toString('hex');
-  apps.insert.run({ id, name, icon, icon_bg, description, client_id, client_secret, callback_url, status:'pending', visible: visible?1:0 });
+  apps.insert.run({ id, name, icon, icon_bg, description, client_id, client_secret, callback_url, status: initStatus, visible: visible?1:0 });
   res.json({ success: true, app: apps.findById.get(id) });
+});
+// 重新生成 client_secret（密钥泄露时轮换；旧密钥立即失效）
+router.post('/admin/apps/:id/regenerate-secret', requireAdmin(2), (req, res) => {
+  const app = apps.findById.get(req.params.id);
+  if (!app) return res.status(404).json({ error: '应用不存在' });
+  const client_secret = crypto.randomBytes(32).toString('hex');
+  db.prepare("UPDATE apps SET client_secret=?, updated_at=datetime('now') WHERE id=?").run(client_secret, app.id);
+  res.json({ success: true, client_secret });
 });
 router.patch('/admin/apps/:id', requireAdmin(2), (req, res) => {
   const app = apps.findById.get(req.params.id);

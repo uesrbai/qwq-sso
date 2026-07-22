@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.5**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.6**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -279,6 +279,20 @@ v3.3.0 之前**只有前者**，所以"第三方登录"实际上是"第三方读
 - **最小化披露**：未授权的字段在 `id_token` 和 `userinfo` 里根本不出现，不是给 null
 - `kyc` scope 即使授权，姓名也只给脱敏结果（张三丰 → 张**），完整姓名永不下发
 - 撤销授权会连带吊销已发出的令牌（`api.js` 的 `DELETE /apps/:id/auth`）
+
+### 管理端「应用管理」的接入凭据（v3.3.3.6 补齐）
+
+第三方要接 OIDC，管理员必须能拿到 `client_id` + `client_secret`。`client_secret` 是**明文**存在
+`apps.client_secret`（不像 API Key 是哈希），本可显示。但早期管理端**任何地方都不显示它**，
+导致第三方无法调 `/oauth/token` 换令牌，接入根本无法完成——这就是用户说的「应用管理没做完」。
+
+现在：新建应用后弹出凭据面板，编辑弹窗里有「🔑 接入凭据」区块（`appCredentialsHtml()`），
+展示 client_id、client_secret（👁 打码可展开、可复制）、四个端点地址、发起示例，
+并提供「重新生成密钥」（`POST /admin/apps/:id/regenerate-secret`，旧密钥立即失效）。
+
+⚠️ 同批修掉一个 bug：`POST /admin/apps` 原本写死 `status:'pending'`，忽略前端传的
+「直接启用」，导致管理员自建应用永远是待审核、无法用于 OIDC 授权（authorize 会因未启用而拒绝）。
+现在按传入的 status 建（合法值 enabled/pending/disabled，默认 enabled）。
 
 ### 登录后跳回授权页（`next` 的传递，v3.3.3.5 修）
 

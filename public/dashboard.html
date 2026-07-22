@@ -2979,6 +2979,58 @@ async function saveAppEdit() {
 }
 
 // openAppEdit 仍需要当前应用数据，从 API 获取
+// 「使用 QWQ SSO 登录」接入凭据面板：client_id / client_secret / 各端点地址。
+// 这是第三方接入的必需信息，尤其 client_secret——之前管理端根本不显示它，
+// 导致第三方无法调 /oauth/token 换令牌，接入无法完成。
+function appCredentialsHtml(a) {
+  const origin = window.location.origin;
+  const secret = a.client_secret || '';
+  const row = (label, value, opts={}) => `
+    <div style="margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--txd);margin-bottom:3px;">${label}</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input ${opts.secret?`type="password" id="cred-secret"`:'readonly'} value="${esc(value)}"
+          style="flex:1;font-family:monospace;font-size:11.5px;height:30px;padding:0 8px;background:var(--sf2);border:1px solid var(--bd);border-radius:3px;color:var(--tx);" readonly/>
+        ${opts.secret?`<button class="btn" style="font-size:11px;padding:4px 8px;" onclick="toggleAppSecret(this)">👁</button>`:''}
+        <button class="btn" style="font-size:11px;padding:4px 8px;" onclick="copyText('${esc(value).replace(/'/g,"\\'")}');showToast('✓ 已复制')">复制</button>
+      </div>
+    </div>`;
+  return `
+    <div style="background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:12px 14px;margin-bottom:6px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+        🔑 接入凭据 <span style="font-size:10px;font-weight:400;color:var(--txd);">（交给第三方系统配置「用 QWQ SSO 登录」）</span>
+      </div>
+      ${row('Client ID', a.client_id || '')}
+      ${row('Client Secret（换令牌用，请妥善保管）', secret, { secret:true })}
+      <div style="display:flex;justify-content:flex-end;margin:-2px 0 10px;">
+        <button class="btn" style="font-size:10.5px;padding:3px 8px;color:var(--warn);border-color:var(--warn);"
+          onclick="regenerateAppSecret('${a.id}')">重新生成密钥</button>
+      </div>
+      ${row('授权端点 authorization_endpoint', origin + '/oauth/authorize')}
+      ${row('令牌端点 token_endpoint', origin + '/oauth/token')}
+      ${row('用户信息 userinfo_endpoint', origin + '/oauth/userinfo')}
+      ${row('OIDC 自动发现', origin + '/.well-known/openid-configuration')}
+      <div style="font-size:10.5px;color:var(--txd);line-height:1.6;margin-top:2px;">
+        第三方发起登录时跳转：<code style="font-size:10px;">${esc(origin)}/oauth/authorize?client_id=…&redirect_uri=…&response_type=code&scope=openid%20profile&state=…</code><br>
+        redirect_uri 必须与上方「回调地址」<b>完全一致</b>，否则拒绝跳转。
+      </div>
+    </div>`;
+}
+
+function toggleAppSecret(btn) {
+  const inp = document.getElementById('cred-secret');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+}
+
+async function regenerateAppSecret(id) {
+  if (!confirm('重新生成后，旧的 Client Secret 立即失效，已接入的第三方需要更新配置。确定继续？')) return;
+  const { ok, data } = await api('POST', `/admin/apps/${id}/regenerate-secret`);
+  if (ok) { showToast('✓ 已生成新密钥'); openAppEdit(id); }
+  else showToast('⚠️ ' + (data?.error || '操作失败'));
+}
+
 async function openAppEdit(id) {
   editingAppId = id;
   const { ok, data } = await api('GET', '/admin/apps');
@@ -2993,8 +3045,9 @@ async function openAppEdit(id) {
         <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="document.getElementById('bind-modal').classList.remove('show')">关闭</button>
       </div>
       <div style="padding:18px 20px;display:flex;flex-direction:column;gap:11px;">
+        ${appCredentialsHtml(a)}
         <div class="settings-grid">
-          <div class="form-row"><label>应用名称</label><input type="text" id="ae-name" value="${a.name}"/></div>
+          <div class="form-row"><label>应用名称</label><input type="text" id="ae-name" value="${esc(a.name)}"/></div>
           <div class="form-row"><label>应用图标（Emoji）</label><input type="text" id="ae-icon" value="${a.icon}" maxlength="2"/></div>
           <div class="form-row full"><label>应用描述</label><input type="text" id="ae-desc" value="${a.description}"/></div>
           <div class="form-row full"><label>回调地址</label><input type="text" id="ae-cb" value="${a.callback_url}" style="font-family:monospace;font-size:12px;"/></div>
@@ -4970,9 +5023,22 @@ async function submitNewApp() {
   const status  = document.getElementById('na-status')?.value;
   if (!name || !cb) { showToast('⚠️ 应用名称和回调地址为必填'); return; }
   const { ok, data } = await api('POST', '/admin/apps', { name, icon, description: desc, callback_url: cb, visible, status });
-  document.getElementById('bind-modal').classList.remove('show');
-  if (ok) { showToast('✓ 应用创建成功'); renderAdmApps(); }
-  else showToast('⚠️ ' + (data.error||'创建失败'));
+  if (!ok) { showToast('⚠️ ' + (data.error||'创建失败')); return; }
+  renderAdmApps();
+  showToast('✓ 应用创建成功');
+  // 创建即展示凭据，方便管理员立刻拿去配置第三方（尤其 Client Secret）
+  const a = data.app;
+  document.getElementById('bind-modal').innerHTML = `
+    <div class="modal" style="min-width:520px;text-align:left;padding:0;overflow:hidden;">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+        <span style="font-size:16px;">✅</span>
+        <div style="flex:1;font-size:14px;font-weight:700;">应用「${esc(a.name)}」已创建</div>
+        <button class="btn" style="font-size:11px;" onclick="document.getElementById('bind-modal').classList.remove('show')">关闭</button>
+      </div>
+      <div style="padding:18px 20px;">
+        ${appCredentialsHtml(a)}
+      </div>
+    </div>`;
 }
 
 // ══════════════════════════════════════════
