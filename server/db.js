@@ -212,6 +212,19 @@ try { db.exec('ALTER TABLE users ADD COLUMN can_change_phone INTEGER NOT NULL DE
 try { db.exec("ALTER TABLE users ADD COLUMN timezone TEXT NOT NULL DEFAULT 'auto'"); } catch(_) {}
 // 记录用户对某个应用实际授权了哪些 scope（老数据默认给最小集）
 try { db.exec("ALTER TABLE user_app_auth ADD COLUMN scope TEXT NOT NULL DEFAULT 'openid profile'"); } catch(_) {}
+// 2FA（TOTP 二次验证）
+try { db.exec('ALTER TABLE users ADD COLUMN twofa_enabled INTEGER NOT NULL DEFAULT 0'); } catch(_) {}
+try { db.exec('ALTER TABLE users ADD COLUMN twofa_secret TEXT'); } catch(_) {}
+try { db.exec(`CREATE TABLE IF NOT EXISTS twofa_recovery_codes (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, code_hash TEXT NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`); } catch(_) {}
+// Passkey（WebAuthn 凭据）
+try { db.exec(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL, cred_id TEXT NOT NULL UNIQUE,
+  public_key TEXT NOT NULL, counter INTEGER NOT NULL DEFAULT 0, transports TEXT,
+  name TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), last_used_at TEXT
+)`); } catch(_) {}
 try { db.exec("ALTER TABLE shop_goods ADD COLUMN redeem_mode TEXT NOT NULL DEFAULT 'code'"); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN allow_instant INTEGER NOT NULL DEFAULT 1'); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN redirect_url TEXT'); } catch(_) {}
@@ -280,6 +293,32 @@ const userStmts = {
     updated_at = datetime('now')
     WHERE id=?`),
   resetStreak: db.prepare(`UPDATE users SET checkin_streak=1, last_checkin=date('now'), updated_at=datetime('now') WHERE id=?`),
+
+  // 2FA
+  set2fa:     db.prepare("UPDATE users SET twofa_enabled=?, twofa_secret=?, updated_at=datetime('now') WHERE id=?"),
+};
+
+// ──────────────────────────────────────────
+// 2FA 恢复码 / Passkey 凭据
+// ──────────────────────────────────────────
+const twofaStmts = {
+  insertCode:  db.prepare('INSERT INTO twofa_recovery_codes (id,user_id,code_hash) VALUES (?,?,?)'),
+  listCodes:   db.prepare('SELECT * FROM twofa_recovery_codes WHERE user_id=? AND used=0'),
+  findCode:    db.prepare('SELECT * FROM twofa_recovery_codes WHERE user_id=? AND code_hash=? AND used=0'),
+  useCode:     db.prepare('UPDATE twofa_recovery_codes SET used=1 WHERE id=?'),
+  clearCodes:  db.prepare('DELETE FROM twofa_recovery_codes WHERE user_id=?'),
+  countCodes:  db.prepare('SELECT COUNT(*) AS n FROM twofa_recovery_codes WHERE user_id=? AND used=0'),
+};
+
+const webauthnStmts = {
+  insert:      db.prepare(`INSERT INTO webauthn_credentials (id,user_id,cred_id,public_key,counter,transports,name)
+    VALUES (@id,@user_id,@cred_id,@public_key,@counter,@transports,@name)`),
+  listByUser:  db.prepare('SELECT * FROM webauthn_credentials WHERE user_id=? ORDER BY created_at DESC'),
+  findByCredId:db.prepare('SELECT * FROM webauthn_credentials WHERE cred_id=?'),
+  updateCounter: db.prepare("UPDATE webauthn_credentials SET counter=?, last_used_at=datetime('now') WHERE id=?"),
+  rename:      db.prepare('UPDATE webauthn_credentials SET name=? WHERE id=? AND user_id=?'),
+  remove:      db.prepare('DELETE FROM webauthn_credentials WHERE id=? AND user_id=?'),
+  countByUser: db.prepare('SELECT COUNT(*) AS n FROM webauthn_credentials WHERE user_id=?'),
 };
 
 // ──────────────────────────────────────────
@@ -426,6 +465,8 @@ module.exports = {
   logs: logStmts,
   apps: appStmts,
   idp: idpStmts,
+  twofa: twofaStmts,
+  webauthn: webauthnStmts,
   apiKeys: apiKeyStmts,
   env: envStmts,
   points: pointsStmts,

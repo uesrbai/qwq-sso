@@ -5,8 +5,9 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
-const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, apiKeys, env, points } = require('./db');
-const { signToken, requireAuth, requireAdmin, requireApiKey } = require('./auth');
+const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, twofa, webauthn, apiKeys, env, points } = require('./db');
+const { signToken, signShortToken, verifyToken, requireAuth, requireAdmin, requireApiKey } = require('./auth');
+const totp = require('./twofa');
 // 短信与邮件统一走 QWQ Message 分发中心（v3.3.3 起不再直连服务商）
 const { sendSmsCode, sendEmailCode, sendEmail, isConfigured: hasMessageHub } = require('./message');
 
@@ -67,8 +68,41 @@ function logLogin(data) {
 
 function safeUser(u) {
   if (!u) return null;
-  const { password_hash, ...safe } = u;
+  // twofa_secret 是敏感密钥，绝不能随用户对象下发
+  const { password_hash, twofa_secret, ...safe } = u;
   return safe;
+}
+
+// 用户的等级标识符（A1/U3…），2FA 强制策略按它匹配
+function levelTag(u) {
+  return (u.role === 'admin' ? 'A' : 'U') + (u.role === 'admin' ? (u.admin_level || 3) : (u.user_level || 4));
+}
+
+// 管理员强制开启 2FA 的等级列表：环境变量 TWOFA_REQUIRED_LEVELS，逗号分隔，如 "A1,A2,U1"
+function twofaRequiredLevels() {
+  return String(process.env.TWOFA_REQUIRED_LEVELS || '')
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+}
+// 该用户是否被强制要求开启 2FA（且当前还没开）
+function mustSetup2fa(u) {
+  if (u.twofa_enabled) return false;
+  return twofaRequiredLevels().includes(levelTag(u));
+}
+
+/**
+ * 登录凭据校验通过后的统一收口：
+ * - 开了 2FA 的用户：不直接发正式 token，改发 5 分钟的中间态令牌，前端再走动态码校验
+ * - 没开的：直接发正式 token；若被强制要求开启，带上 mustSetup2fa 让前端引导绑定
+ */
+function finishLogin(res, user, req, method) {
+  const ua = req.headers['user-agent'];
+  if (user.twofa_enabled) {
+    const twofa_token = signShortToken({ uid: user.id, stage: '2fa', method });
+    return res.json({ success: true, twofa_required: true, twofa_token });
+  }
+  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method, ip: req.ip, ua });
+  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
+  return res.json({ success: true, token, user: safeUser(user), mustSetup2fa: mustSetup2fa(user) });
 }
 
 // ── 短信验证码 ──
@@ -113,9 +147,7 @@ router.post('/sms/verify', (req, res) => {
     user = users.findById.get(id);
   }
   if (user.status === 'disabled') return res.status(403).json({ error: '账号已停用，请联系管理员' });
-  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: '短信验证码', ip: req.ip, ua: req.headers['user-agent'] });
-  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
-  res.json({ success: true, token, user: safeUser(user) });
+  return finishLogin(res, user, req, '短信验证码');
 });
 
 // ── 邮箱验证码 ──
@@ -166,9 +198,7 @@ router.post('/email/verify-code', (req, res) => {
     user = users.findById.get(id);
   }
   if (user.status === 'disabled') return res.status(403).json({ error: '账号已停用' });
-  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: '邮箱验证码', ip: req.ip, ua: req.headers['user-agent'] });
-  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
-  res.json({ success: true, token, user: safeUser(user) });
+  return finishLogin(res, user, req, '邮箱验证码');
 });
 
 // ── 账号密码注册/登录（邮箱或手机号均可）──
@@ -198,12 +228,107 @@ async function handleRegister(req, res) {
     password_hash: hash, role: 'user', admin_level: null, user_level: 4, status: 'active',
   });
   const user = users.findById.get(id);
-  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
-  res.json({ success: true, token, user: safeUser(user) });
+  return finishLogin(res, user, req, byPhone ? '手机注册' : '邮箱注册');
 }
 
 router.post('/email/register',   handleRegister);   // 旧路径，保留兼容
 router.post('/account/register', handleRegister);   // 语义更准的别名
+
+// ══════════════════════════════════════════
+// 2FA（TOTP 二次验证）
+// ══════════════════════════════════════════
+
+// 登录第二步：用中间态令牌 + 动态码（或恢复码）换正式 token
+router.post('/2fa/login-verify', (req, res) => {
+  const { twofa_token, code, recovery_code } = req.body;
+  const { valid, data } = verifyToken(twofa_token || '');
+  if (!valid || data.stage !== '2fa') return res.status(401).json({ error: '验证会话已过期，请重新登录' });
+  const user = users.findById.get(data.uid);
+  if (!user || !user.twofa_enabled || !user.twofa_secret) return res.status(400).json({ error: '账号状态异常，请重新登录' });
+  if (user.status === 'disabled') return res.status(403).json({ error: '账号已停用，请联系管理员' });
+
+  let ok = false, viaRecovery = false;
+  if (recovery_code) {
+    const row = twofa.findCode.get(user.id, totp.hashRecoveryCode(recovery_code));
+    if (row) { twofa.useCode.run(row.id); ok = true; viaRecovery = true; }
+  } else {
+    ok = totp.verifyToken(user.twofa_secret, code);
+  }
+  if (!ok) {
+    logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: data.method || '账号密码', ip: req.ip, ua: req.headers['user-agent'], status: 'failed', failReason: '2FA 验证失败' });
+    return res.status(401).json({ error: recovery_code ? '恢复码无效或已使用' : '动态验证码不正确' });
+  }
+  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: (data.method || '账号密码') + (viaRecovery ? '+恢复码' : '+2FA'), ip: req.ip, ua: req.headers['user-agent'] });
+  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
+  const remaining = twofa.countCodes.get(user.id).n;
+  res.json({ success: true, token, user: safeUser(user), recoveryCodesLeft: remaining });
+});
+
+// 我的 2FA 状态
+router.get('/user/2fa/status', requireAuth, (req, res) => {
+  const user = users.findById.get(req.user.uid);
+  res.json({
+    success: true,
+    enabled: !!user.twofa_enabled,
+    mustSetup: mustSetup2fa(user),
+    recoveryCodesLeft: user.twofa_enabled ? twofa.countCodes.get(user.id).n : 0,
+  });
+});
+
+// 发起绑定：生成一个待启用密钥（不落库，返回给前端；启用时再校验并持久化）
+router.post('/user/2fa/setup', requireAuth, (req, res) => {
+  const user = users.findById.get(req.user.uid);
+  if (user.twofa_enabled) return res.status(400).json({ error: '已开启 2FA，如需重置请先关闭' });
+  const secret = totp.generateSecret();
+  const label  = user.email || user.phone || user.name || ('uid' + user.uid_seq);
+  const issuer = process.env.TWOFA_ISSUER || 'QWQ SSO';
+  res.json({ success: true, secret, otpauth: totp.otpauthUri(secret, label, issuer) });
+});
+
+// 确认绑定：校验一次动态码，通过则启用并下发恢复码（仅此一次明文）
+router.post('/user/2fa/enable', requireAuth, (req, res) => {
+  const user = users.findById.get(req.user.uid);
+  if (user.twofa_enabled) return res.status(400).json({ error: '已开启 2FA' });
+  const { secret, code } = req.body;
+  if (!secret || !/^[A-Z2-7]+$/.test(secret)) return res.status(400).json({ error: '密钥无效，请重新发起绑定' });
+  if (!totp.verifyToken(secret, code)) return res.status(400).json({ error: '动态验证码不正确，请确认 App 时间同步后重试' });
+
+  users.set2fa.run(1, secret, user.id);
+  twofa.clearCodes.run(user.id);
+  const codes = totp.generateRecoveryCodes(10);
+  const insertAll = db.transaction(list => list.forEach(c => twofa.insertCode.run(uuidv4(), user.id, totp.hashRecoveryCode(c))));
+  insertAll(codes);
+  res.json({ success: true, recoveryCodes: codes });
+});
+
+// 关闭 2FA：需要当前动态码或恢复码确认（防他人趁登录态偷偷关掉）
+router.post('/user/2fa/disable', requireAuth, (req, res) => {
+  const user = users.findById.get(req.user.uid);
+  if (!user.twofa_enabled) return res.json({ success: true });
+  if (mustSetup2fa({ ...user, twofa_enabled: 0 })) {
+    return res.status(403).json({ error: '管理员已要求你的等级必须开启 2FA，无法关闭' });
+  }
+  const { code, recovery_code } = req.body;
+  let ok = false;
+  if (recovery_code) ok = !!twofa.findCode.get(user.id, totp.hashRecoveryCode(recovery_code));
+  else ok = totp.verifyToken(user.twofa_secret, code);
+  if (!ok) return res.status(401).json({ error: '验证码不正确，无法关闭' });
+  users.set2fa.run(0, null, user.id);
+  twofa.clearCodes.run(user.id);
+  res.json({ success: true });
+});
+
+// 重新生成恢复码（作废旧的），需当前动态码确认
+router.post('/user/2fa/recovery/regenerate', requireAuth, (req, res) => {
+  const user = users.findById.get(req.user.uid);
+  if (!user.twofa_enabled) return res.status(400).json({ error: '未开启 2FA' });
+  if (!totp.verifyToken(user.twofa_secret, req.body.code)) return res.status(401).json({ error: '动态验证码不正确' });
+  twofa.clearCodes.run(user.id);
+  const codes = totp.generateRecoveryCodes(10);
+  const insertAll = db.transaction(list => list.forEach(c => twofa.insertCode.run(uuidv4(), user.id, totp.hashRecoveryCode(c))));
+  insertAll(codes);
+  res.json({ success: true, recoveryCodes: codes });
+});
 
 // 按任意标识符解析用户：邮箱 / 手机号 / UID（#00001 或 1）/ 用户名。
 // 返回用户行；重名返回 AMBIGUOUS；找不到返回 null。
@@ -262,10 +387,7 @@ async function handlePasswordLogin(req, res) {
     logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method, ip: req.ip, ua, status: 'failed', failReason: '密码错误' });
     return res.status(401).json({ error: badMsg });
   }
-
-  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method, ip: req.ip, ua });
-  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
-  res.json({ success: true, token, user: safeUser(user) });
+  return finishLogin(res, user, req, method);
 }
 
 router.post('/email/login',   handlePasswordLogin);   // 旧路径，保留兼容

@@ -24,6 +24,11 @@ function signToken(payload) {
   return jwt.sign(payload, getSecret(), { expiresIn });
 }
 
+// 短时令牌：用于 2FA 中间态（密码已过、待输入动态码），默认 5 分钟
+function signShortToken(payload, expiresIn = '5m') {
+  return jwt.sign(payload, getSecret(), { expiresIn });
+}
+
 function verifyToken(token) {
   try {
     return { valid: true, data: jwt.verify(token, getSecret()) };
@@ -109,4 +114,4 @@ function requireApiKey(scope) {
   };
 }
 
-module.exports = { signToken, verifyToken, requireAuth, requireAdmin, requireApiKey };
+module.exports = { signToken, signShortToken, verifyToken, requireAuth, requireAdmin, requireApiKey };

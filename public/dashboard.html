@@ -1045,6 +1045,14 @@ async function loadMe() {
               </div>
             </div>
           </div>
+
+          <!-- 两步验证（2FA / TOTP）-->
+          <div class="card" id="twofa-card">
+            <div class="card-header"><h3>🔐 两步验证（2FA）</h3></div>
+            <div class="card-body" id="twofa-body">
+              <div style="text-align:center;padding:20px;color:var(--txd);">加载中…</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2047,7 +2055,7 @@ function switchTabEl(show, hide, el) {
   document.getElementById(hide).style.display = 'none';
   el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  if (show === 'as-bind') loadAccountBindings();
+  if (show === 'as-bind') { loadAccountBindings(); loadTwofaCard(); }
 }
 
 // ── 签到 ──
@@ -2074,6 +2082,142 @@ async function unbindOauth(provider, name) {
 }
 
 // 加载账号绑定页
+// ══════════════════════════════════════════
+// 两步验证（2FA / TOTP）
+// ══════════════════════════════════════════
+async function loadTwofaCard() {
+  const body = document.getElementById('twofa-body');
+  if (!body) return;
+  if (_IS_DEV) { body.innerHTML = '<div style="color:var(--txd);font-size:12px;padding:10px;">演示模式不支持 2FA，请在真实环境体验。</div>'; return; }
+  const { ok, data } = await api('GET', '/user/2fa/status');
+  if (!ok) { body.innerHTML = '<div style="color:var(--err);font-size:12px;">加载失败</div>'; return; }
+
+  if (!data.enabled) {
+    body.innerHTML = `
+      <div style="font-size:12.5px;color:var(--txm);line-height:1.7;margin-bottom:12px;">
+        开启后，除账号密码外，登录还需输入身份验证器 App（Google Authenticator / 微软 Authenticator / Authy 等）里的 6 位动态码，安全性显著提升。
+        ${data.mustSetup ? '<br><b style="color:var(--warn);">⚠️ 管理员已要求你的等级必须开启两步验证。</b>' : ''}
+      </div>
+      <button class="btn primary" onclick="start2faSetup()">开启两步验证</button>`;
+  } else {
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span class="badge ok">已开启</span>
+        <span style="font-size:12px;color:var(--txm);">剩余恢复码 ${data.recoveryCodesLeft} 个${data.recoveryCodesLeft<=2?'（偏少，建议重新生成）':''}</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" onclick="regen2faRecovery()">重新生成恢复码</button>
+        <button class="btn" style="color:var(--err);border-color:var(--err);" onclick="disable2fa()">关闭两步验证</button>
+      </div>`;
+  }
+}
+
+// 通用：弹一个输入动态码的小浮层，回调拿到 code
+function ask2faCode(title, onSubmit, { recovery = false } = {}) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  ov.innerHTML = `
+    <div style="background:var(--sf,#fff);border-radius:14px;max-width:340px;width:100%;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;">${esc(title)}</div>
+      <input id="ask-code" inputmode="numeric" placeholder="${recovery?'恢复码':'6 位动态码'}" maxlength="20"
+        style="width:100%;height:40px;text-align:center;font-size:17px;letter-spacing:${recovery?2:6}px;font-family:monospace;border:1px solid var(--bd);border-radius:9px;outline:none;background:var(--sf2);color:var(--tx);"/>
+      <div id="ask-err" style="color:var(--err);font-size:12px;min-height:16px;margin-top:6px;"></div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="btn" style="flex:1;" id="ask-cancel">取消</button>
+        <button class="btn primary" style="flex:1;" id="ask-ok">确定</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const codeEl = ov.querySelector('#ask-code'), errEl = ov.querySelector('#ask-err');
+  codeEl.focus();
+  ov.querySelector('#ask-cancel').onclick = () => ov.remove();
+  ov.querySelector('#ask-ok').onclick = async () => {
+    const v = codeEl.value.trim(); if (!v) { errEl.textContent='请输入'; return; }
+    const err = await onSubmit(v);
+    if (err) errEl.textContent = err; else ov.remove();
+  };
+  codeEl.addEventListener('keydown', e => { if (e.key==='Enter') ov.querySelector('#ask-ok').click(); });
+}
+
+// 展示恢复码（生成后仅此一次）
+function showRecoveryCodes(codes) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  ov.innerHTML = `
+    <div style="background:var(--sf,#fff);border-radius:14px;max-width:380px;width:100%;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px;">🔑 恢复码</div>
+      <div style="font-size:12px;color:var(--txm);line-height:1.7;margin-bottom:12px;">请立即保存到安全的地方。手机丢失时，每个恢复码可代替动态码登录一次。<b>此列表仅显示这一次。</b></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-family:monospace;font-size:13px;background:var(--sf2);padding:12px;border-radius:8px;margin-bottom:12px;">
+        ${codes.map(c=>`<div>${esc(c)}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" style="flex:1;" onclick="copyText('${codes.join(' ')}');showToast('✓ 已复制')">复制全部</button>
+        <button class="btn primary" style="flex:1;" onclick="this.closest('div[style*=fixed]').remove()">我已保存</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+// 开启流程：拉密钥 → 展示（手动录入 + otpauth 链接）→ 校验 → 出恢复码
+async function start2faSetup() {
+  const { ok, data } = await api('POST', '/user/2fa/setup');
+  if (!ok) { showToast('⚠️ ' + (data.error||'发起失败')); return; }
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;overflow:auto;';
+  ov.innerHTML = `
+    <div style="background:var(--sf,#fff);border-radius:14px;max-width:400px;width:100%;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px;">开启两步验证</div>
+      <div style="font-size:12.5px;color:var(--txm);line-height:1.7;margin-bottom:10px;">
+        1. 打开身份验证器 App（Google/微软 Authenticator、Authy 等）<br>
+        2. 选择「手动输入密钥」，填入下方密钥；或在手机上直接点这个链接打开 App：
+      </div>
+      <a href="${esc(data.otpauth)}" style="display:block;font-size:12px;color:var(--ac);word-break:break-all;margin-bottom:10px;">${esc(data.otpauth)}</a>
+      <div style="font-size:11px;color:var(--txd);margin-bottom:4px;">密钥（手动录入用）</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;">
+        <input readonly value="${esc(data.secret)}" style="flex:1;font-family:monospace;font-size:13px;letter-spacing:1px;height:34px;padding:0 8px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--tx);"/>
+        <button class="btn" onclick="copyText('${esc(data.secret)}');showToast('✓ 已复制')">复制</button>
+      </div>
+      <div style="font-size:12.5px;color:var(--txm);margin-bottom:6px;">3. 输入 App 里显示的 6 位动态码完成绑定：</div>
+      <input id="setup-code" inputmode="numeric" placeholder="6 位动态码" maxlength="6"
+        style="width:100%;height:40px;text-align:center;font-size:17px;letter-spacing:6px;font-family:monospace;border:1px solid var(--bd);border-radius:9px;outline:none;background:var(--sf2);color:var(--tx);"/>
+      <div id="setup-err" style="color:var(--err);font-size:12px;min-height:16px;margin-top:6px;"></div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="btn" style="flex:1;" id="setup-cancel">取消</button>
+        <button class="btn primary" style="flex:1;" id="setup-ok">完成绑定</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#setup-code').focus();
+  ov.querySelector('#setup-cancel').onclick = () => ov.remove();
+  ov.querySelector('#setup-ok').onclick = async () => {
+    const code = ov.querySelector('#setup-code').value.trim();
+    const errEl = ov.querySelector('#setup-err');
+    if (!code) { errEl.textContent = '请输入动态码'; return; }
+    const r = await api('POST', '/user/2fa/enable', { secret: data.secret, code });
+    if (!r.ok) { errEl.textContent = r.data.error || '绑定失败'; return; }
+    ov.remove();
+    showToast('✓ 两步验证已开启');
+    showRecoveryCodes(r.data.recoveryCodes);
+    loadTwofaCard();
+  };
+}
+
+async function disable2fa() {
+  ask2faCode('关闭两步验证：请输入当前动态码确认', async (code) => {
+    const r = await api('POST', '/user/2fa/disable', { code });
+    if (!r.ok) return r.data.error || '关闭失败';
+    showToast('✓ 已关闭两步验证'); loadTwofaCard(); return null;
+  });
+}
+
+async function regen2faRecovery() {
+  ask2faCode('重新生成恢复码：请输入当前动态码确认', async (code) => {
+    const r = await api('POST', '/user/2fa/recovery/regenerate', { code });
+    if (!r.ok) return r.data.error || '生成失败';
+    showRecoveryCodes(r.data.recoveryCodes); loadTwofaCard(); return null;
+  });
+}
+
 async function loadAccountBindings() {
   const { ok, data } = await api('GET', '/user/me');
   if (!ok) return;
@@ -3765,6 +3909,8 @@ const ENV_GROUPS = [
       { key: 'SESSION_SECRET',    label: 'Session 密钥',      desc: '用于加密 Session 的随机字符串',                      required: false,  secret: true,  placeholder: '',   value: '' },
       { key: 'SMS_CODE_EXPIRE',   label: '短信码有效期(秒)',   desc: '短信验证码的过期秒数，默认 300 秒',                  required: false, secret: false, placeholder: '300', value: '' },
       { key: 'EMAIL_CODE_EXPIRE', label: '邮箱码有效期(秒)',   desc: '邮箱验证码的过期秒数，默认 600 秒',                  required: false, secret: false, placeholder: '600', value: '' },
+      { key: 'TWOFA_REQUIRED_LEVELS', label: '强制 2FA 的等级', desc: '逗号分隔的等级标识符（如 A1,A2,U1），这些等级的用户必须开启两步验证；留空则全部自愿', required: false, secret: false, placeholder: 'A1,A2', value: '' },
+      { key: 'TWOFA_ISSUER',      label: '2FA 显示名称',      desc: '身份验证器 App 里显示的服务名，默认 QWQ SSO',        required: false, secret: false, placeholder: 'QWQ SSO', value: '' },
     ]
   },
   {
