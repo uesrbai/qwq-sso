@@ -1072,6 +1072,8 @@
         </div>
 
         <button class="btn-primary" onclick="doLogin()">登录</button>
+        <button class="btn-primary" id="passkey-login-btn" onclick="doPasskeyLogin()"
+          style="display:none;margin-top:8px;background:var(--surface2);color:var(--text);border:1px solid var(--border);">🔑 用 Passkey 登录</button>
         <div class="aux-links">
           <button onclick="switchMode('register')">注册账号</button>
           <span class="aux-dot">·</span>
@@ -1185,6 +1187,8 @@
 
 </div>
 
+<!-- Passkey(WebAuthn) 浏览器胶水层（同源）-->
+<script src="/webauthn-glue.js"></script>
 <script>
   // ═══════════════════════════════════════════
   // 平台配置（AppID 等非敏感值，服务端可模板注入）
@@ -1520,6 +1524,20 @@
     } catch(e) { showTip('login','error',e.message||'登录失败'); }
   }
 
+  // ── Passkey 登录（无密码）──
+  async function doPasskeyLogin() {
+    if (!window.WebAuthnGlue || !WebAuthnGlue.supported()) { showTip('login','error','当前浏览器不支持 Passkey'); return; }
+    try {
+      const opts = await (await fetch('/api/passkey/login-options', { method:'POST', headers:{'Content-Type':'application/json'} })).json();
+      let assertion;
+      try { assertion = await WebAuthnGlue.startAuthentication(opts); }
+      catch (e) { if (e.name === 'NotAllowedError') return; throw e; }
+      const r = await fetch('/api/passkey/login-verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ credential: assertion }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error);
+      redirect(d.token, d.user);
+    } catch (e) { showTip('login','error', e.message || 'Passkey 登录失败'); }
+  }
+
   // ── 2FA 登录第二步：动态浮层（避免改动主表单）──
   function show2faLogin(twofaToken) {
     let useRecovery = false;
@@ -1620,6 +1638,12 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     renderPlatformList();
+
+    // 浏览器支持 Passkey 才显示按钮
+    if (window.WebAuthnGlue && WebAuthnGlue.supported()) {
+      const pb = document.getElementById('passkey-login-btn');
+      if (pb) pb.style.display = '';
+    }
 
     // 若带了 next（OIDC 授权流程），先把它存进服务端 session，
     // 这样连扫码登录（不经过 /auth/<平台> 入口）回来后也能跳回授权页

@@ -1,6 +1,6 @@
 {
   "name": "unified-sso-system",
-  "version": "3.3.7",
+  "version": "3.3.8",
   "description": "统一登录系统 SSO - 多渠道登录 + 用户/管理后台",
   "main": "server/index.js",
   "scripts": {
@@ -18,7 +18,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "uuid": "^9.0.0",
-    "better-sqlite3": "^9.4.3"
+    "better-sqlite3": "^9.4.3",
+    "@simplewebauthn/server": "^13.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

@@ -128,7 +128,7 @@ function buildFooterHtml() {
     : '';
 
   // 版本信息点击跳转 GitHub（不可修改）
-  const versionLink = `<a href="https://github.com/uesrbai/qwq-sso" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;opacity:.7;">Powered by QWQ SSO v3.3.7</a>`;
+  const versionLink = `<a href="https://github.com/uesrbai/qwq-sso" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;opacity:.7;">Powered by QWQ SSO v3.3.8</a>`;
 
   return `<footer style="text-align:center;padding:20px 20px 8px;margin-top:24px;font-size:11px;color:rgba(0,0,0,.38);border-top:1px solid rgba(0,0,0,.07);line-height:1.9;user-select:none;">
   <div style="font-weight:500;">${copyright}</div>${infoLine}
@@ -156,6 +156,7 @@ app.use((req, res, next) => {
 app.use('/setup', setupRoutes);
 app.use('/auth',  oauthRoutes);
 app.use('/api',   apiRoutes);
+app.use('/api/passkey', require('./passkey'));   // Passkey / WebAuthn
 // OIDC Provider：/.well-known/openid-configuration 和 /oauth/* 挂在根路径（必须在 static 之前）
 app.use('/',      providerRoutes);
 app.use('/',      express.static(path.join(__dirname, '../public')));

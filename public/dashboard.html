@@ -1053,6 +1053,14 @@ async function loadMe() {
               <div style="text-align:center;padding:20px;color:var(--txd);">加载中…</div>
             </div>
           </div>
+
+          <!-- Passkey（指纹 / 面容 / 硬件密钥）-->
+          <div class="card" id="passkey-card">
+            <div class="card-header"><h3>🔑 Passkey（指纹 / 面容 / 硬件密钥）</h3></div>
+            <div class="card-body" id="passkey-body">
+              <div style="text-align:center;padding:20px;color:var(--txd);">加载中…</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1866,6 +1874,8 @@ async function loadMe() {
 
 <!-- 本地 QR 生成器（同源，仅用于 2FA 绑定二维码，密钥不出客户端）-->
 <script src="/qr-mini.js"></script>
+<!-- Passkey(WebAuthn) 浏览器胶水层（同源）-->
+<script src="/webauthn-glue.js"></script>
 <script>
 // ── 用户数据 ──
 const USERS = [
@@ -2057,7 +2067,7 @@ function switchTabEl(show, hide, el) {
   document.getElementById(hide).style.display = 'none';
   el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  if (show === 'as-bind') { loadAccountBindings(); loadTwofaCard(); }
+  if (show === 'as-bind') { loadAccountBindings(); loadTwofaCard(); loadPasskeyCard(); }
 }
 
 // ── 签到 ──
@@ -2227,6 +2237,60 @@ async function regen2faRecovery() {
     if (!r.ok) return r.data.error || '生成失败';
     showRecoveryCodes(r.data.recoveryCodes); loadTwofaCard(); return null;
   });
+}
+
+// ══════════════════════════════════════════
+// Passkey（WebAuthn）
+// ══════════════════════════════════════════
+async function loadPasskeyCard() {
+  const body = document.getElementById('passkey-body');
+  if (!body) return;
+  if (_IS_DEV) { body.innerHTML = '<div style="color:var(--txd);font-size:12px;padding:10px;">演示模式不支持 Passkey，请在真实环境体验。</div>'; return; }
+  if (!window.WebAuthnGlue || !WebAuthnGlue.supported()) {
+    body.innerHTML = '<div style="color:var(--txd);font-size:12px;padding:10px;">当前浏览器不支持 Passkey（需较新的浏览器 + HTTPS）。</div>';
+    return;
+  }
+  const { ok, data } = await api('GET', '/passkey/list');
+  if (!ok) { body.innerHTML = '<div style="color:var(--err);font-size:12px;">加载失败</div>'; return; }
+  const list = data.passkeys || [];
+  const rows = list.length ? list.map(p => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bd);">
+      <span style="font-size:16px;">🔑</span>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:500;">${esc(p.name)}</div>
+        <div style="font-size:11px;color:var(--txd);">添加于 ${esc((p.created_at||'').slice(0,10))}${p.last_used_at?' · 最近使用 '+esc(p.last_used_at.slice(0,10)):''}</div>
+      </div>
+      <button class="btn" style="font-size:11px;padding:3px 8px;color:var(--err);border-color:var(--err);"
+        data-id="${esc(p.id)}" data-name="${esc(p.name)}" onclick="removePasskey(this.dataset.id,this.dataset.name)">删除</button>
+    </div>`).join('') : '<div style="font-size:12px;color:var(--txd);padding:6px 0;">还没有 Passkey。添加后，登录时用指纹 / 面容 / 硬件密钥即可，无需密码。</div>';
+  body.innerHTML = `
+    <div style="font-size:12.5px;color:var(--txm);line-height:1.7;margin-bottom:10px;">
+      Passkey 用设备的指纹 / 面容 / PIN 或硬件密钥验证身份，天然防钓鱼，登录时无需输入密码。
+    </div>
+    ${rows}
+    <button class="btn primary" style="margin-top:12px;" onclick="addPasskey()">+ 添加 Passkey</button>`;
+}
+
+async function addPasskey() {
+  try {
+    const { ok, data } = await api('POST', '/passkey/register-options');
+    if (!ok) { showToast('⚠️ ' + (data.error||'发起失败')); return; }
+    showToast('请在弹出的系统对话框中完成验证…');
+    let cred;
+    try { cred = await WebAuthnGlue.startRegistration(data); }
+    catch (e) { if (e.name === 'NotAllowedError') { showToast('已取消'); return; } throw e; }
+    const name = prompt('给这个 Passkey 起个名字（如：我的手机、工作电脑）', '我的 Passkey') || '我的 Passkey';
+    const r = await api('POST', '/passkey/register-verify', { credential: cred, name });
+    if (r.ok) { showToast('✓ Passkey 已添加'); loadPasskeyCard(); }
+    else showToast('⚠️ ' + (r.data.error||'添加失败'));
+  } catch (e) { showToast('⚠️ ' + (e.message||'添加失败')); }
+}
+
+async function removePasskey(id, name) {
+  if (!confirm(`删除 Passkey「${name}」？删除后该设备将无法再用于登录。`)) return;
+  const { ok } = await api('DELETE', `/passkey/${id}`);
+  if (ok) { showToast('✓ 已删除'); loadPasskeyCard(); }
+  else showToast('⚠️ 删除失败');
 }
 
 async function loadAccountBindings() {
