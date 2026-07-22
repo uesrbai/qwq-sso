@@ -264,8 +264,22 @@
   const token = params.get('token') || localStorage.getItem('sso_token') || '';
   const nameFromUrl = params.get('name') || '';
 
-  if (token) {
-    localStorage.setItem('sso_token', token);
+  // 站内相对回跳地址（第三方登录接 OIDC 授权时用）
+  function safeNext() {
+    const n = params.get('next');
+    if (!n || !n.startsWith('/') || n.startsWith('//')) return null;
+    return n;
+  }
+
+  if (token) localStorage.setItem('sso_token', token);
+
+  // 有 next 就跳过这个中间页，直接回到原流程（授权页）——
+  // 第三方登录经服务端回调到这里，token 已存进 localStorage，authorize.html 即可读到
+  const _next = token ? safeNext() : null;
+
+  if (_next) {
+    window.location.replace(_next);
+  } else if (token) {
     document.getElementById('token-display').textContent = token;
 
     // 解析 JWT payload

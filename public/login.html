@@ -1319,7 +1319,9 @@
     if (!cfg) return;
 
     if (cfg.mode === 'redirect') {
-      window.location.href = cfg.url;
+      // 带上 next，服务端会存进 session，登录成功后跳回（OIDC 授权流程用）
+      const nx = safeNext();
+      window.location.href = cfg.url + (nx ? '?next=' + encodeURIComponent(nx) : '');
       return;
     }
 
@@ -1632,6 +1634,13 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     renderPlatformList();
+
+    // 若带了 next（OIDC 授权流程），先把它存进服务端 session，
+    // 这样连扫码登录（不经过 /auth/<平台> 入口）回来后也能跳回授权页
+    const _nx = safeNext();
+    if (_nx) {
+      try { await fetch('/auth/stash-next?next=' + encodeURIComponent(_nx), { credentials: 'include' }); } catch (_) {}
+    }
 
     const isFileProtocol = location.protocol === 'file:';
     const isLocalhost    = location.hostname === 'localhost' || location.hostname === '127.0.0.1';

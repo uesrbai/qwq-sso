@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.4**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.3.5**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -279,6 +279,21 @@ v3.3.0 之前**只有前者**，所以"第三方登录"实际上是"第三方读
 - **最小化披露**：未授权的字段在 `id_token` 和 `userinfo` 里根本不出现，不是给 null
 - `kyc` scope 即使授权，姓名也只给脱敏结果（张三丰 → 张**），完整姓名永不下发
 - 撤销授权会连带吊销已发出的令牌（`api.js` 的 `DELETE /apps/:id/auth`）
+
+### 登录后跳回授权页（`next` 的传递，v3.3.3.5 修）
+
+第三方跳来授权时若用户未登录，`authorize.html` 会带 `?next=<授权页完整地址>` 跳到 `login.html`。
+登录完成后要跳回这个 `next` 继续授权。两条登录路径的处理方式不同，别改坏：
+
+- **邮箱/手机 密码或验证码登录**（纯前端）：`login.html` 的 `redirect()` 直接读 URL 里的
+  `next`（`safeNext()` 只放行站内相对路径）跳回，不经中间页
+- **第三方 OAuth 登录（微信/企业微信/飞书… 全部 13 家）**：要经过「本站→平台→回调」一圈
+  服务端跳转，`next` 没法一路带在 URL 上。做法是 `oauth.js` 有个 `router.use` 中间件把进入
+  `/auth/*` 时的 `?next=` 存进 **session**（`postLoginNext`），`loginSuccess()` 再取出，
+  拼进 `/login-success.html?...&next=`，中间页拿到 `next` 就跳过倒计时直接跳回
+- **扫码登录**（微信/企业微信）：二维码直接指向平台、不经过 `/auth/<平台>` 入口，所以
+  `login.html` 载入时若有 `next` 会先 `fetch('/auth/stash-next?next=...')` 把它存进 session
+- 三处都只接受站内相对路径（`/` 开头、非 `//`），防止 token 被带去外站（开放重定向）
 
 ---
 

@@ -19,6 +19,32 @@ const { signToken } = require('./auth');
 const router = express.Router();
 
 // ──────────────────────────────────────────
+// 登录后回跳地址（OIDC 授权流程用）
+//
+// 第三方登录要经过「本站 → 平台 → 回调」一圈服务端跳转，前端的 ?next=
+// 没法一路带过去，所以在进入 /auth/* 时把它存进 session，登录成功后取出。
+// 只接受站内相对路径，防止被构造成开放重定向把 token 带去外站。
+// ──────────────────────────────────────────
+function safeNextPath(raw) {
+  if (typeof raw !== 'string') return null;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
+
+// 任何进入 /auth 且带 ?next= 的请求，把回跳地址记进 session。
+// 回调请求本身不带 next，因此不会覆盖。
+router.use((req, res, next) => {
+  const nx = safeNextPath(req.query.next);
+  if (nx && req.session) req.session.postLoginNext = nx;
+  next();
+});
+
+// 扫码登录（微信/企业微信）的二维码直接指向平台，不经过 /auth/<平台> 入口，
+// 所以 next 无从带上。登录页在展示二维码前先打这个端点，把 next 存进 session。
+// （上面的中间件已完成存储，这里只需回一个空响应）
+router.get('/stash-next', (req, res) => res.status(204).end());
+
+// ──────────────────────────────────────────
 // 工具函数
 // ──────────────────────────────────────────
 function genState() {
@@ -85,7 +111,17 @@ function loginSuccess(res, user) {
   } catch (_) {}
 
   const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
-  res.redirect(`/login-success.html?token=${token}&name=${encodeURIComponent(user.name || '')}`);
+
+  // 取出并清掉登录前记下的回跳地址（OIDC 授权流程会用到）
+  let next = null;
+  if (res.req?.session?.postLoginNext) {
+    next = safeNextPath(res.req.session.postLoginNext);
+    delete res.req.session.postLoginNext;
+  }
+  // 中间页拿 token 存进 localStorage 后再跳到 next；有 next 时它会跳过倒计时直接回授权页
+  const q = new URLSearchParams({ token, name: user.name || '' });
+  if (next) q.set('next', next);
+  res.redirect(`/login-success.html?${q}`);
 }
 
 /** 统一错误处理 */
