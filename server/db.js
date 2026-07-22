@@ -320,6 +320,8 @@ const logStmts = {
   findByUser:  db.prepare('SELECT * FROM login_logs WHERE user_id=? ORDER BY created_at DESC LIMIT ?'),
   findAll:     db.prepare('SELECT * FROM login_logs ORDER BY created_at DESC LIMIT 200'),
   findRecent:  db.prepare("SELECT * FROM login_logs WHERE date(created_at) >= date('now',?) ORDER BY created_at DESC"),
+  // 用户自己在指定天数窗口内的登录记录（用户端展示 + 导出）
+  findByUserRecent: db.prepare("SELECT * FROM login_logs WHERE user_id=? AND date(created_at) >= date('now',?) ORDER BY created_at DESC LIMIT 2000"),
 };
 
 // ──────────────────────────────────────────

@@ -680,8 +680,44 @@ router.delete('/user/oauth/:provider', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// 用户端登录日志的展示窗口与是否允许导出，由两个环境变量控制：
+//   LOGINDATE_DAY    展示/导出的天数窗口，默认 30
+//   LOGINDATE_EXPORT 是否允许用户导出，off/0/false/no 关闭，默认开
+function loginLogConfig() {
+  const n = parseInt(process.env.LOGINDATE_DAY, 10);
+  const days = Number.isFinite(n) ? Math.max(1, Math.min(3650, n)) : 30;   // 非数字回落 30，0/负数夹到 1
+  const raw  = String(process.env.LOGINDATE_EXPORT ?? 'on').trim().toLowerCase();
+  const canExport = !['off', '0', 'false', 'no', ''].includes(raw);
+  return { days, canExport };
+}
+
 router.get('/user/login-logs', requireAuth, (req, res) => {
-  res.json({ success: true, logs: logs.findByUser.all(req.user.uid, 20) });
+  const { days, canExport } = loginLogConfig();
+  const rows = logs.findByUserRecent.all(req.user.uid, `-${days} days`);
+  res.json({ success: true, logs: rows, windowDays: days, canExport });
+});
+
+// 导出自己的登录日志为 CSV（在配置窗口内；LOGINDATE_EXPORT 关闭时拒绝）
+router.get('/user/login-logs/export', requireAuth, (req, res) => {
+  const { days, canExport } = loginLogConfig();
+  if (!canExport) return res.status(403).json({ error: '管理员未开放登录日志导出' });
+  const rows = logs.findByUserRecent.all(req.user.uid, `-${days} days`);
+
+  const esc = v => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = ['时间', '登录方式', '应用', 'IP', '设备', '状态', '失败原因'];
+  const lines = rows.map(l => [
+    l.created_at, l.method, l.app_name, l.ip, l.user_agent,
+    l.status === 'success' ? '成功' : '失败', l.fail_reason,
+  ].map(esc).join(','));
+  // 前缀 UTF-8 BOM（U+FEFF），Excel 打开中文不乱码
+  const csv = '﻿' + [header.join(','), ...lines].join('\r\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="my-login-logs-${days}d.csv"`);
+  res.send(csv);
 });
 
 router.get('/user/points-log', requireAuth, (req, res) => {
