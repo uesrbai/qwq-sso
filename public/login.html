@@ -1037,68 +1037,19 @@
       <div class="panel active" id="panel-login">
         <div id="tip-login" class="tip"></div>
 
-        <!-- 一级：账号类型 + 账号所属域 -->
-        <div class="form-grid">
-          <div class="f">
-            <lbl>账号类型</lbl>
-            <select id="acct-type" onchange="onAcctTypeChange()">
-              <option value="email">邮箱</option>
-              <option value="phone">手机号</option>
-            </select>
-          </div>
-          <div class="f" id="f-domain">
-            <lbl>账号所属域</lbl>
-            <select id="acct-domain">
-              <option value="">— 不限 —</option>
-              <option value="@gmail.com">Gmail (@gmail.com)</option>
-              <option value="@qq.com">QQ 邮箱 (@qq.com)</option>
-              <option value="@163.com">网易 (@163.com)</option>
-              <option value="@outlook.com">Outlook (@outlook.com)</option>
-              <option value="custom">自定义…</option>
-            </select>
-          </div>
-          <div class="f" id="f-dialcode" style="display:none;">
-            <lbl>电话区号</lbl>
-            <select id="acct-dialcode">
-              <option value="+86">+86 中国大陆</option>
-              <option value="+852">+852 香港</option>
-              <option value="+853">+853 澳门</option>
-              <option value="+886">+886 台湾</option>
-              <option value="+1">+1 美国/加拿大</option>
-              <option value="+44">+44 英国</option>
-              <option value="+81">+81 日本</option>
-              <option value="+82">+82 韩国</option>
-              <option value="+65">+65 新加坡</option>
-              <option value="+61">+61 澳大利亚</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- 自定义域名展开 -->
-        <div class="sub-fields" id="custom-domain-wrap">
-          <div class="form-grid" style="margin-top:0;">
-            <div class="f f-full">
-              <lbl>自定义域名</lbl>
-              <input type="text" id="custom-domain" placeholder="例：@company.com" />
-            </div>
-          </div>
-        </div>
-
-        <div class="form-sep"></div>
-
-        <!-- 二级：账号值 + 子 Tab（验证码/密码） -->
+        <!-- 子 Tab（验证码/密码） -->
         <div class="sub-tabs">
           <button class="sub-tab active" id="stab-code" onclick="switchLoginSub('code')">验证码</button>
           <button class="sub-tab" id="stab-pw" onclick="switchLoginSub('pw')">密码</button>
         </div>
 
-        <!-- 账号输入（复合行） -->
+        <!-- 账号输入：邮箱 / 手机号 / 用户名 / UID，自动识别 -->
         <div class="f" style="margin-bottom:8px;">
           <lbl id="acct-label">账号</lbl>
           <div class="account-row">
-            <span class="account-prefix" id="acct-prefix">邮箱</span>
-            <input class="account-input" id="acct-value" type="email" placeholder="请输入邮箱地址" autocomplete="email" />
+            <input class="account-input" id="acct-value" type="text" style="padding-left:12px;" placeholder="邮箱 / 手机号 / 用户名 / UID" autocomplete="username" />
           </div>
+          <div id="acct-hint" style="font-size:11px;color:var(--text-dim);margin-top:4px;">验证码登录仅支持邮箱或手机号；密码登录四种均可</div>
         </div>
 
         <!-- 验证码子面板 -->
@@ -1442,23 +1393,9 @@
     document.getElementById('stab-pw').classList.toggle('active',   m==='pw');
   }
 
-  // ── 登录面板：账号类型切换 ──
-  function onAcctTypeChange() {
-    const type = document.getElementById('acct-type').value;
-    const isEmail = type === 'email';
-    document.getElementById('f-domain').style.display    = isEmail ? '' : 'none';
-    document.getElementById('f-dialcode').style.display  = isEmail ? 'none' : '';
-    if (!isEmail) document.getElementById('custom-domain-wrap').classList.remove('open');
-    const inp = document.getElementById('acct-value');
-    document.getElementById('acct-prefix').textContent = isEmail ? '邮箱' : '手机';
-    inp.type        = isEmail ? 'email' : 'tel';
-    inp.placeholder = isEmail ? '请输入邮箱地址' : '请输入手机号';
-    inp.maxLength   = isEmail ? 254 : 11;
-  }
-
-  document.getElementById('acct-domain').addEventListener('change', function() {
-    document.getElementById('custom-domain-wrap').classList.toggle('open', this.value === 'custom');
-  });
+  // 账号标识符类型判断（前端只用于验证码走邮箱还是短信；真正的解析在后端）
+  const isEmailStr = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  const isPhoneStr = v => /^1[3-9]\d{9}$/.test(v);
 
   // ── 邮箱域名策略：让「账号所属域」下拉框真实反映后端配置 ──
   // v3.3.2 之前这两个下拉框纯粹是输入辅助（帮你把 @gmail.com 拼到输入框后面），
@@ -1541,13 +1478,11 @@
     }, 1000);
   }
 
-  // ── 发送验证码 ──
+  // ── 发送验证码（自动识别邮箱 / 手机号）──
   async function sendLoginCode() {
-    const type = document.getElementById('acct-type').value;
-    const val  = document.getElementById('acct-value').value.trim();
-    const isEmail = type === 'email';
-    if (isEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) return showTip('login','error','请输入正确的邮箱地址');
-    if (!isEmail && !/^1[3-9]\d{9}$/.test(val)) return showTip('login','error','请输入正确的手机号');
+    const val = document.getElementById('acct-value').value.trim();
+    const isEmail = isEmailStr(val), isPhone = isPhoneStr(val);
+    if (!isEmail && !isPhone) return showTip('login','error','验证码登录请输入邮箱或手机号（用户名/UID 请用密码登录）');
     const btn = document.getElementById('login-send');
     btn.disabled = true; btn.textContent = '…';
     try {
@@ -1559,23 +1494,24 @@
 
   // ── 登录提交 ──
   async function doLogin() {
-    const type = document.getElementById('acct-type').value;
     const val  = document.getElementById('acct-value').value.trim();
-    const isEmail = type === 'email';
     const isPw = document.getElementById('sub-pw').style.display !== 'none';
     if (!val) return showTip('login','error','请填写账号');
     try {
       let url, body;
       if (isPw) {
+        // 密码登录：账号可以是邮箱 / 手机号 / 用户名 / UID，后端统一解析
         const pass = document.getElementById('login-pass').value;
         if (!pass) return showTip('login','error','请填写密码');
-        url = '/api/email/login';
-        body = isEmail ? {email:val,password:pass} : {phone:val,password:pass};
+        url = '/api/account/login';
+        body = { account: val, password: pass };
       } else {
+        // 验证码登录：只能是邮箱或手机号（验证码要有下发渠道）
         const code = document.getElementById('login-code').value.trim();
         if (!code) return showTip('login','error','请填写验证码');
-        url  = isEmail ? '/api/email/verify-code' : '/api/sms/verify';
-        body = isEmail ? {email:val,code} : {phone:val,code};
+        if (isEmailStr(val))      { url = '/api/email/verify-code'; body = { email: val, code }; }
+        else if (isPhoneStr(val)) { url = '/api/sms/verify';        body = { phone: val, code }; }
+        else return showTip('login','error','验证码登录仅支持邮箱或手机号，用户名/UID 请用密码登录');
       }
       const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const d = await r.json(); if (!r.ok) throw new Error(d.error);

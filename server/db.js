@@ -244,6 +244,8 @@ const userStmts = {
   findById:      db.prepare('SELECT * FROM users WHERE id = ?'),
   findByEmail:   db.prepare('SELECT * FROM users WHERE email = ?'),
   findByPhone:   db.prepare('SELECT * FROM users WHERE phone = ?'),
+  findByUidSeq:  db.prepare('SELECT * FROM users WHERE uid_seq = ?'),
+  findByName:    db.prepare('SELECT * FROM users WHERE name = ?'),   // 用户名可能重名，用 .all()
   findAll:       db.prepare('SELECT * FROM users ORDER BY uid_seq ASC'),
   findByStatus:  db.prepare('SELECT * FROM users WHERE status = ? ORDER BY uid_seq ASC'),
   countAll:      db.prepare('SELECT COUNT(*) as n FROM users'),

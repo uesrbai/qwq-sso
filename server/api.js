@@ -205,20 +205,42 @@ async function handleRegister(req, res) {
 router.post('/email/register',   handleRegister);   // 旧路径，保留兼容
 router.post('/account/register', handleRegister);   // 语义更准的别名
 
-// 账号密码登录：邮箱或手机号均可
+// 按任意标识符解析用户：邮箱 / 手机号 / UID（#00001 或 1）/ 用户名。
+// 返回用户行；重名返回 AMBIGUOUS；找不到返回 null。
+const AMBIGUOUS = Symbol('ambiguous');
+function resolveUser(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  if (s.includes('@'))            return users.findByEmail.get(s) || null;   // 邮箱
+  if (/^1[3-9]\d{9}$/.test(s))    return users.findByPhone.get(s) || null;   // 手机号
+  const digits = s.replace(/^#/, '');
+  if (/^\d+$/.test(digits)) {                                                // UID（#00001 / 00001 / 1）
+    const bySeq = users.findByUidSeq.get(parseInt(digits, 10));
+    if (bySeq) return bySeq;                                                 // 纯数字但非有效 UID → 继续当用户名试
+  }
+  const byName = users.findByName.all(s);                                    // 用户名（可能重名）
+  if (byName.length === 1) return byName[0];
+  if (byName.length > 1)   return AMBIGUOUS;
+  return null;
+}
+
+// 账号密码登录：邮箱 / 手机号 / UID / 用户名 均可
 // （路径沿用 /email/login 是为了兼容既有调用方，实际不限邮箱；同时提供语义更准的别名）
 async function handlePasswordLogin(req, res) {
-  const { email, phone, password } = req.body;
-  const account = email || phone;
-  const byPhone = !email && !!phone;
-  const method  = byPhone ? '手机密码' : '邮箱密码';
-  const badMsg  = byPhone ? '手机号或密码不正确' : '邮箱或密码不正确';
+  const { email, phone, account, password } = req.body;
+  const identifier = String(account || email || phone || '').trim();
+  const method = '账号密码';
+  const badMsg = '账号或密码不正确';
 
-  if (!account || !password) {
-    return res.status(400).json({ error: `请输入${byPhone ? '手机号' : '邮箱'}和密码` });
+  if (!identifier || !password) {
+    return res.status(400).json({ error: '请输入账号和密码' });
   }
 
-  const user = byPhone ? users.findByPhone.get(phone) : users.findByEmail.get(email);
+  const resolved = resolveUser(identifier);
+  if (resolved === AMBIGUOUS) {
+    return res.status(400).json({ error: '该用户名对应多个账号，请改用邮箱 / 手机号 / UID 登录' });
+  }
+  const user = resolved;
   const ua = req.headers['user-agent'];
 
   if (!user) {
