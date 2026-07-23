@@ -5,7 +5,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
-const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, twofa, webauthn, announcements, apiKeys, env, points } = require('./db');
+const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, twofa, webauthn, announcements, documents, apiKeys, env, points } = require('./db');
 const { signToken, signShortToken, verifyToken, requireAuth, requireAdmin, requireApiKey } = require('./auth');
 const totp = require('./twofa');
 // 短信与邮件统一走 QWQ Message 分发中心（v3.3.3 起不再直连服务商）
@@ -707,6 +707,55 @@ router.get('/public/configured-platforms', (req, res) => {
   // 如果一个都没配置，默认显示微信+企业微信
   if (configured.length === 0) configured.push('wechat', 'wecom');
   res.json({ success: true, platforms: configured });
+});
+
+// ══════════════════════════════════════════
+// 站点法律文档（服务条款 / 隐私政策）
+// ══════════════════════════════════════════
+const DOC_KEYS = ['terms', 'privacy'];
+const DOC_TITLES = { terms: '服务条款', privacy: '隐私政策' };
+
+// 富文本净化：内容由管理员撰写（可信），但仍要挡住 XSS 向量，防止管理员账号被盗或误操作。
+// 规则：去掉 <script>/<style>/<iframe> 等危险标签、所有 on* 事件属性、javascript: 协议。
+function sanitizeHtml(html) {
+  let s = String(html || '');
+  s = s.replace(/<\s*(script|style|iframe|object|embed|link|meta|base)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
+  s = s.replace(/<\s*(script|style|iframe|object|embed|link|meta|base)\b[^>]*\/?>/gi, '');
+  s = s.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');   // onclick= 等
+  s = s.replace(/(href|src)\s*=\s*("|')?\s*javascript:[^"'>\s]*/gi, '$1="#"');  // javascript: 协议
+  return s;
+}
+
+// 公开：登录页点「服务条款/隐私政策」时展示（无需登录）
+router.get('/public/document/:key', (req, res) => {
+  if (!DOC_KEYS.includes(req.params.key)) return res.status(404).json({ error: '文档不存在' });
+  const row = documents.get.get(req.params.key);
+  res.json({
+    success: true,
+    key: req.params.key,
+    title: (row && row.title) || DOC_TITLES[req.params.key],
+    content: (row && row.content) || '',
+    updated_at: row ? row.updated_at : null,
+  });
+});
+
+// 管理端：读取两份文档
+router.get('/admin/documents', requireAdmin(3), (req, res) => {
+  const docs = DOC_KEYS.map(k => {
+    const row = documents.get.get(k);
+    return { key: k, title: (row && row.title) || DOC_TITLES[k], content: (row && row.content) || '', updated_at: row ? row.updated_at : null };
+  });
+  res.json({ success: true, documents: docs });
+});
+
+// 管理端：保存（净化后落库）
+router.put('/admin/documents/:key', requireAdmin(2), (req, res) => {
+  const key = req.params.key;
+  if (!DOC_KEYS.includes(key)) return res.status(404).json({ error: '文档不存在' });
+  const title = (req.body.title || DOC_TITLES[key]).slice(0, 100);
+  const content = sanitizeHtml(req.body.content).slice(0, 200000);
+  documents.upsert.run(key, title, content);
+  res.json({ success: true, document: documents.get.get(key) });
 });
 
 // ══════════════════════════════════════════

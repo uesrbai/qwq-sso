@@ -240,6 +240,12 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS announcement_reads (
   read_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, announcement_id)
 )`); } catch(_) {}
+// 站点法律文档（服务条款 / 隐私政策），富文本 HTML，管理端可编辑
+try { db.exec(`CREATE TABLE IF NOT EXISTS site_documents (
+  doc_key TEXT PRIMARY KEY,                          -- terms | privacy
+  title TEXT NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`); } catch(_) {}
 try { db.exec("ALTER TABLE shop_goods ADD COLUMN redeem_mode TEXT NOT NULL DEFAULT 'code'"); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN allow_instant INTEGER NOT NULL DEFAULT 1'); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN redirect_url TEXT'); } catch(_) {}
@@ -353,6 +359,15 @@ const announcementStmts = {
   markRead:   db.prepare(`INSERT INTO announcement_reads (user_id,announcement_id,read_version) VALUES (?,?,?)
     ON CONFLICT(user_id,announcement_id) DO UPDATE SET read_version=excluded.read_version, read_at=datetime('now')`),
   clearReads: db.prepare('DELETE FROM announcement_reads WHERE announcement_id=?'),
+};
+
+// ──────────────────────────────────────────
+// 站点法律文档
+// ──────────────────────────────────────────
+const documentStmts = {
+  get:    db.prepare('SELECT * FROM site_documents WHERE doc_key=?'),
+  upsert: db.prepare(`INSERT INTO site_documents (doc_key,title,content,updated_at) VALUES (?,?,?,datetime('now'))
+    ON CONFLICT(doc_key) DO UPDATE SET title=excluded.title, content=excluded.content, updated_at=datetime('now')`),
 };
 
 // ──────────────────────────────────────────
@@ -502,6 +517,7 @@ module.exports = {
   twofa: twofaStmts,
   webauthn: webauthnStmts,
   announcements: announcementStmts,
+  documents: documentStmts,
   apiKeys: apiKeyStmts,
   env: envStmts,
   points: pointsStmts,

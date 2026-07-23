@@ -553,6 +553,13 @@ function _devApi(method, path, body) {
   if (path === '/admin/announcements' && method === 'POST') return ok({ success:true, announcement:{ id:'anx', ...body } });
   if (path.startsWith('/admin/announcements/') && (method === 'PATCH' || method === 'DELETE')) return ok({ success:true });
 
+  // 登录协议文档（演示模式）
+  if (path === '/admin/documents') return ok({ success:true, documents:[
+    { key:'terms', title:'服务条款', content:'<p>演示服务条款。</p>', updated_at:null },
+    { key:'privacy', title:'隐私政策', content:'<p>演示隐私政策。</p>', updated_at:null },
+  ] });
+  if (path.startsWith('/admin/documents/') && method === 'PUT') return ok({ success:true, document:{ key:path.split('/').pop(), title:body.title, content:body.content, updated_at:new Date().toISOString() } });
+
   if (path === '/admin/api-keys') return ok({ success:true, keys:[
     { id:'k1', name:'演示密钥', token_prefix:'sk-live-dev-xxx…', scopes:'["users:read","auth:verify"]', status:'active', last_used_at:new Date().toISOString(), created_at:new Date().toISOString() }
   ]});
@@ -712,6 +719,10 @@ async function loadMe() {
       <button class="nav-item" onclick="goto('adm-announce')" id="ni-adm-announce">
         <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8v4l10 4V4L3 8zM3 8H2v4h1M13 6l4-2M13 14l4 2"/></svg>
         公告管理
+      </button>
+      <button class="nav-item" onclick="goto('adm-docs')" id="ni-adm-docs">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 2h7l4 4v12H5zM12 2v4h4M7 10h6M7 13h6"/></svg>
+        登录协议
       </button>
       <button class="nav-item" onclick="goto('adm-env')" id="ni-adm-env">
         <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M6 7l3 3-3 3M11 13h3"/></svg>
@@ -1752,6 +1763,44 @@ async function loadMe() {
         </div>
       </div>
 
+      <!-- ▸ 管理端：登录协议（服务条款 / 隐私政策）-->
+      <div class="page" id="page-adm-docs">
+        <div class="tabs">
+          <div class="tab active" onclick="switchDocTab('terms',this)">服务条款</div>
+          <div class="tab" onclick="switchDocTab('privacy',this)">隐私政策</div>
+        </div>
+        <div class="card">
+          <div class="card-body">
+            <div class="form-row" style="margin-bottom:10px;">
+              <label>标题</label>
+              <input type="text" id="doc-title" style="max-width:320px;"/>
+            </div>
+            <label style="font-size:11px;color:var(--txd);">正文（富文本，登录页点击链接时展示给用户）</label>
+            <!-- 工具条 -->
+            <div id="doc-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;padding:6px;background:var(--bg);border:1px solid var(--bd);border-radius:6px 6px 0 0;">
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;font-weight:700;" onmousedown="event.preventDefault()" onclick="docCmd('bold')">B</button>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;font-style:italic;" onmousedown="event.preventDefault()" onclick="docCmd('italic')">I</button>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;text-decoration:underline;" onmousedown="event.preventDefault()" onclick="docCmd('underline')">U</button>
+              <span style="width:1px;background:var(--bd);margin:0 2px;"></span>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;" onmousedown="event.preventDefault()" onclick="docCmd('formatBlock','H3')">大标题</button>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;" onmousedown="event.preventDefault()" onclick="docCmd('insertUnorderedList')">• 列表</button>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;" onmousedown="event.preventDefault()" onclick="docInsertLink()">🔗 链接</button>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;" onmousedown="event.preventDefault()" onclick="docInsertImage()">🖼 图片</button>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;" onmousedown="event.preventDefault()" onclick="docInsertVideo()">🎬 视频</button>
+              <span style="width:1px;background:var(--bd);margin:0 2px;"></span>
+              <button type="button" class="btn" style="font-size:12px;padding:3px 8px;" onmousedown="event.preventDefault()" onclick="docCmd('removeFormat')">清除格式</button>
+            </div>
+            <div id="doc-editor" contenteditable="true"
+              style="min-height:280px;max-height:50vh;overflow:auto;padding:14px;background:var(--sf);border:1px solid var(--bd);border-top:none;border-radius:0 0 6px 6px;font-size:14px;line-height:1.8;color:var(--tx);outline:none;"></div>
+            <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+              <button class="btn primary" onclick="saveDoc()">保存</button>
+              <button class="btn" onclick="previewDoc()">预览</button>
+              <span id="doc-saved-at" style="font-size:11px;color:var(--txd);"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ▸ 管理端：环境变量 -->
       <div class="page" id="page-adm-env">
 
@@ -2083,6 +2132,7 @@ function goto(page) {
   if(page === 'adm-api-logs') { loadAdmApiLogs(); }
   if(page === 'adm-env')   { renderEnvPage(); loadEnvPollStrategy(); loadFooterItems(); }
   if(page === 'adm-announce') loadAdmAnnouncements();
+  if(page === 'adm-docs') loadDocs();
   if(page === 'adm-levels') loadLevels();
   if(page === 'adm-env') renderEnvPage();
   if(page === 'adm-api') renderApiPage();
@@ -3218,6 +3268,77 @@ async function admRevokeCode(id, code, hasRecords) {
 // renderUserDetail 空实现已在上方定义
 
 // ── 管理端：应用管理 ──
+// ══════════════════════════════════════════
+// 管理端：登录协议（富文本编辑）
+// ══════════════════════════════════════════
+let _docCurrentKey = 'terms';
+let _docCache = {};
+
+async function loadDocs() {
+  const { ok, data } = await api('GET', '/admin/documents');
+  if (!ok) return;
+  data.documents.forEach(d => { _docCache[d.key] = d; });
+  renderDocEditor(_docCurrentKey);
+}
+function switchDocTab(key, el) {
+  // 切换前把当前编辑内容暂存进缓存，避免未保存丢失
+  if (_docCache[_docCurrentKey]) {
+    _docCache[_docCurrentKey].title = document.getElementById('doc-title').value;
+    _docCache[_docCurrentKey].content = document.getElementById('doc-editor').innerHTML;
+  }
+  _docCurrentKey = key;
+  document.querySelectorAll('#page-adm-docs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderDocEditor(key);
+}
+function renderDocEditor(key) {
+  const d = _docCache[key] || { title:'', content:'', updated_at:null };
+  document.getElementById('doc-title').value = d.title || '';
+  document.getElementById('doc-editor').innerHTML = d.content || '';
+  document.getElementById('doc-saved-at').textContent = d.updated_at ? ('上次保存：' + fmtTime(d.updated_at)) : '尚未保存';
+}
+function docCmd(cmd, val) { document.execCommand(cmd, false, val || null); document.getElementById('doc-editor').focus(); }
+function docInsertLink() {
+  const url = prompt('链接地址（http/https）：', 'https://');
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { showToast('⚠️ 仅支持 http/https 链接'); return; }
+  document.execCommand('createLink', false, url);
+}
+function docInsertImage() {
+  const url = prompt('图片地址（http/https）：', 'https://');
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { showToast('⚠️ 仅支持 http/https 图片地址'); return; }
+  document.execCommand('insertHTML', false, `<img src="${esc(url)}" style="max-width:100%;"/>`);
+}
+function docInsertVideo() {
+  const url = prompt('视频文件地址（http/https，mp4 等）：', 'https://');
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { showToast('⚠️ 仅支持 http/https 视频地址'); return; }
+  document.execCommand('insertHTML', false, `<video src="${esc(url)}" controls style="max-width:100%;"></video><p></p>`);
+}
+async function saveDoc() {
+  const title = document.getElementById('doc-title').value.trim();
+  const content = document.getElementById('doc-editor').innerHTML;
+  const { ok, data } = await api('PUT', `/admin/documents/${_docCurrentKey}`, { title, content });
+  if (ok) {
+    _docCache[_docCurrentKey] = data.document;   // 用净化后的服务端返回值刷新
+    document.getElementById('doc-editor').innerHTML = data.document.content;
+    document.getElementById('doc-saved-at').textContent = '上次保存：' + fmtTime(data.document.updated_at);
+    showToast('✓ 已保存');
+  } else showToast('⚠️ ' + (data.error||'保存失败'));
+}
+function previewDoc() {
+  const html = document.getElementById('doc-editor').innerHTML;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  ov.innerHTML = `<div style="background:var(--sf,#fff);border-radius:14px;max-width:520px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+    <div style="padding:14px 20px;border-bottom:1px solid var(--bd);font-weight:700;display:flex;justify-content:space-between;">
+      <span>${esc(document.getElementById('doc-title').value||'预览')}</span>
+      <button class="btn" style="font-size:11px;" onclick="this.closest('div[style*=fixed]').remove()">关闭</button></div>
+    <div style="padding:20px;font-size:14px;line-height:1.85;">${html}</div></div>`;
+  document.body.appendChild(ov);
+}
+
 // ══════════════════════════════════════════
 // 用户端：公告弹窗
 // ══════════════════════════════════════════

@@ -1162,7 +1162,7 @@
       </div>
 
       <div class="footer">
-        登录即代表同意 <a href="#">服务条款</a> 与 <a href="#">隐私政策</a>
+        登录即代表同意 <a href="javascript:void 0" onclick="showDoc('terms')">服务条款</a> 与 <a href="javascript:void 0" onclick="showDoc('privacy')">隐私政策</a>
         <div id="dev-hint" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
           <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:5px;">
             未配置 SSO 地址？请联系管理员在「环境变量」中设置 <code style="font-size:10px;opacity:.75;">BASE_URL</code>
@@ -1522,6 +1522,28 @@
       if (d.twofa_required) return show2faLogin(d.twofa_token);   // 开了 2FA → 进二段
       redirect(d.token, d.user);
     } catch(e) { showTip('login','error',e.message||'登录失败'); }
+  }
+
+  // ── 服务条款 / 隐私政策 弹窗 ──
+  async function showDoc(key) {
+    let doc;
+    try {
+      const r = await fetch('/api/public/document/' + key);
+      doc = await r.json();
+      if (!r.ok) throw 0;
+    } catch (_) { showTip('login','error','文档加载失败'); return; }
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+    const body = (doc.content && doc.content.trim()) ? doc.content : '<p style="color:#888;">管理员尚未设置该文档内容。</p>';
+    ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+      <div style="padding:16px 22px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:16px;font-weight:700;color:#1D1D1F;">${(doc.title||'').replace(/[<>]/g,'')}</div>
+        <button style="border:none;background:none;font-size:20px;cursor:pointer;color:#888;" onclick="this.closest('div[style*=fixed]').remove()">×</button>
+      </div>
+      <div style="padding:22px;overflow:auto;font-size:14px;line-height:1.85;color:#333;">${body}</div>
+    </div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
   }
 
   // ── Passkey 登录（无密码）──
