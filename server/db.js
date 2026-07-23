@@ -246,6 +246,9 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS site_documents (
   title TEXT NOT NULL DEFAULT '', content TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`); } catch(_) {}
+try { db.exec("ALTER TABLE site_documents ADD COLUMN link TEXT NOT NULL DEFAULT ''"); } catch(_) {}   // 可选外部链接，填了则点击跳外链
+// 公告：富文本内容 + 可选外部链接
+try { db.exec("ALTER TABLE announcements ADD COLUMN link TEXT NOT NULL DEFAULT ''"); } catch(_) {}
 try { db.exec("ALTER TABLE shop_goods ADD COLUMN redeem_mode TEXT NOT NULL DEFAULT 'code'"); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN allow_instant INTEGER NOT NULL DEFAULT 1'); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN redirect_url TEXT'); } catch(_) {}
@@ -350,8 +353,8 @@ const announcementStmts = {
   findActive: db.prepare("SELECT * FROM announcements WHERE active=1 ORDER BY (level='urgent') DESC, created_at DESC"),
   findById:   db.prepare('SELECT * FROM announcements WHERE id=?'),
   // updated_at 用毫秒精度（strftime %f），避免"同一秒内更新+已读"导致重弹漏判
-  insert:     db.prepare("INSERT INTO announcements (id,title,content,level,active,updated_at) VALUES (@id,@title,@content,@level,@active,strftime('%Y-%m-%d %H:%M:%f','now'))"),
-  update:     db.prepare("UPDATE announcements SET title=@title, content=@content, level=@level, active=@active, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=@id"),
+  insert:     db.prepare("INSERT INTO announcements (id,title,content,level,active,link,updated_at) VALUES (@id,@title,@content,@level,@active,@link,strftime('%Y-%m-%d %H:%M:%f','now'))"),
+  update:     db.prepare("UPDATE announcements SET title=@title, content=@content, level=@level, active=@active, link=@link, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=@id"),
   setActive:  db.prepare("UPDATE announcements SET active=?, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?"),
   remove:     db.prepare('DELETE FROM announcements WHERE id=?'),
   // 已读状态
@@ -366,8 +369,8 @@ const announcementStmts = {
 // ──────────────────────────────────────────
 const documentStmts = {
   get:    db.prepare('SELECT * FROM site_documents WHERE doc_key=?'),
-  upsert: db.prepare(`INSERT INTO site_documents (doc_key,title,content,updated_at) VALUES (?,?,?,datetime('now'))
-    ON CONFLICT(doc_key) DO UPDATE SET title=excluded.title, content=excluded.content, updated_at=datetime('now')`),
+  upsert: db.prepare(`INSERT INTO site_documents (doc_key,title,content,link,updated_at) VALUES (?,?,?,?,datetime('now'))
+    ON CONFLICT(doc_key) DO UPDATE SET title=excluded.title, content=excluded.content, link=excluded.link, updated_at=datetime('now')`),
 };
 
 // ──────────────────────────────────────────

@@ -6,7 +6,7 @@
 
 ## 项目是什么
 
-**QWQ SSO** — 统一登录系统，当前版本 **v3.3.10.1**。
+**QWQ SSO** — 统一登录系统，当前版本 **v3.3.11**。
 
 - 部署地址：`https://qwqsso.zeabur.app`（Zeabur 托管）
 - GitHub：`https://github.com/uesrbai/qwq-sso`
@@ -394,6 +394,20 @@ v3.3.0 之前**只有前者**，所以"第三方登录"实际上是"第三方读
 - Zeabur 会自动从 GitHub 拉取部署，`git push` 成功后无需额外操作
 
 ---
+
+## v3.3.11 一批 UX 补齐（用户反馈）
+
+- **忘记密码（v3.3.11 新增）**：登录页「忘记密码」原是死链，现在弹窗走公开接口
+  `POST /api/public/forgot-password/send`（按 `resolveUser` 解析账号→给绑定的邮箱/手机发码，
+  码存 `reset:<userId>`，**无论账号是否存在都返回同样文案**不泄露存在性）+
+  `/reset`（校验码→`updatePassword`，新密码≥8 位，码一次性）
+- **登录协议 / 公告都支持外部链接**：`site_documents` 和 `announcements` 各加 `link` 列
+  （`safeLink` 只放行 http/https）。文档填了外链则登录页点击直接新标签打开、不弹富文本；
+  公告填了外链则弹窗里出现「查看详情」按钮
+- **公告内容改为富文本**：原来是纯文本转义显示，现在是 `contenteditable` 富文本（复用
+  `rtExec`/`rtLink`/`rtImage`），保存时 `sanitizeHtml` 净化，弹窗按 HTML 渲染
+- **用户端应用市场「管理」按钮**原来没绑事件（死按钮），现在 `openMyAppDetail()` 弹详情
+  （权限明细 + 授权时间 + 撤销）
 
 ## 交互习惯（供后续沟通参考）
 

@@ -555,10 +555,10 @@ function _devApi(method, path, body) {
 
   // 登录协议文档（演示模式）
   if (path === '/admin/documents') return ok({ success:true, documents:[
-    { key:'terms', title:'服务条款', content:'<p>演示服务条款。</p>', updated_at:null },
-    { key:'privacy', title:'隐私政策', content:'<p>演示隐私政策。</p>', updated_at:null },
+    { key:'terms', title:'服务条款', content:'<p>演示服务条款。</p>', link:'', updated_at:null },
+    { key:'privacy', title:'隐私政策', content:'<p>演示隐私政策。</p>', link:'', updated_at:null },
   ] });
-  if (path.startsWith('/admin/documents/') && method === 'PUT') return ok({ success:true, document:{ key:path.split('/').pop(), title:body.title, content:body.content, updated_at:new Date().toISOString() } });
+  if (path.startsWith('/admin/documents/') && method === 'PUT') return ok({ success:true, document:{ key:path.split('/').pop(), title:body.title, content:body.content, link:body.link||'', updated_at:new Date().toISOString() } });
 
   if (path === '/admin/api-keys') return ok({ success:true, keys:[
     { id:'k1', name:'演示密钥', token_prefix:'sk-live-dev-xxx…', scopes:'["users:read","auth:verify"]', status:'active', last_used_at:new Date().toISOString(), created_at:new Date().toISOString() }
@@ -1771,11 +1771,11 @@ async function loadMe() {
         </div>
         <div class="card">
           <div class="card-body">
-            <div class="form-row" style="margin-bottom:10px;">
-              <label>标题</label>
-              <input type="text" id="doc-title" style="max-width:320px;"/>
+            <div class="settings-grid" style="margin-bottom:10px;">
+              <div class="form-row"><label>标题</label><input type="text" id="doc-title"/></div>
+              <div class="form-row"><label>外部链接（可选，填了则登录页点击直接跳外链，忽略下方富文本）</label><input type="text" id="doc-link" placeholder="https://example.com/terms" style="font-family:monospace;font-size:12px;"/></div>
             </div>
-            <label style="font-size:11px;color:var(--txd);">正文（富文本，登录页点击链接时展示给用户）</label>
+            <label style="font-size:11px;color:var(--txd);">正文（富文本，未填外链时登录页点击展示这段内容）</label>
             <!-- 工具条 -->
             <div id="doc-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;padding:6px;background:var(--bg);border:1px solid var(--bd);border-radius:6px 6px 0 0;">
               <button type="button" class="btn" style="font-size:12px;padding:3px 8px;font-weight:700;" onmousedown="event.preventDefault()" onclick="docCmd('bold')">B</button>
@@ -2982,7 +2982,7 @@ async function renderMarket() {
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;">
         ${a.userAuthed
-          ? `<span class="badge ok">已授权</span><button class="btn" style="font-size:11px;padding:4px 10px;">管理</button>`
+          ? `<span class="badge ok">已授权</span><button class="btn" style="font-size:11px;padding:4px 10px;" data-id="${esc(a.id)}" data-name="${esc(a.name)}" onclick="openMyAppDetail(this.dataset.id,this.dataset.name)">管理</button>`
           : `<span class="badge grey">未授权</span><button class="btn primary" style="font-size:11px;padding:4px 10px;"
                data-cid="${esc(a.client_id)}" data-cb="${esc((a.callback_url||'').split(',')[0].trim())}"
                onclick="userAuthApp(this.dataset.cid, this.dataset.cb)">前往授权</button>`}
@@ -3284,6 +3284,7 @@ function switchDocTab(key, el) {
   // 切换前把当前编辑内容暂存进缓存，避免未保存丢失
   if (_docCache[_docCurrentKey]) {
     _docCache[_docCurrentKey].title = document.getElementById('doc-title').value;
+    _docCache[_docCurrentKey].link = document.getElementById('doc-link').value;
     _docCache[_docCurrentKey].content = document.getElementById('doc-editor').innerHTML;
   }
   _docCurrentKey = key;
@@ -3292,12 +3293,17 @@ function switchDocTab(key, el) {
   renderDocEditor(key);
 }
 function renderDocEditor(key) {
-  const d = _docCache[key] || { title:'', content:'', updated_at:null };
+  const d = _docCache[key] || { title:'', content:'', link:'', updated_at:null };
   document.getElementById('doc-title').value = d.title || '';
+  document.getElementById('doc-link').value = d.link || '';
   document.getElementById('doc-editor').innerHTML = d.content || '';
   document.getElementById('doc-saved-at').textContent = d.updated_at ? ('上次保存：' + fmtTime(d.updated_at)) : '尚未保存';
 }
 function docCmd(cmd, val) { document.execCommand(cmd, false, val || null); document.getElementById('doc-editor').focus(); }
+// 通用富文本命令（作用于当前聚焦的 contenteditable，文档编辑器与公告编辑器共用）
+function rtExec(cmd, val) { document.execCommand(cmd, false, val || null); }
+function rtLink() { const u = prompt('链接地址（http/https）：', 'https://'); if (!u) return; if (!/^https?:\/\//i.test(u)) { showToast('⚠️ 仅支持 http/https'); return; } document.execCommand('createLink', false, u); }
+function rtImage() { const u = prompt('图片地址（http/https）：', 'https://'); if (!u) return; if (!/^https?:\/\//i.test(u)) { showToast('⚠️ 仅支持 http/https'); return; } document.execCommand('insertHTML', false, `<img src="${esc(u)}" style="max-width:100%;"/>`); }
 function docInsertLink() {
   const url = prompt('链接地址（http/https）：', 'https://');
   if (!url) return;
@@ -3318,8 +3324,9 @@ function docInsertVideo() {
 }
 async function saveDoc() {
   const title = document.getElementById('doc-title').value.trim();
+  const link = document.getElementById('doc-link').value.trim();
   const content = document.getElementById('doc-editor').innerHTML;
-  const { ok, data } = await api('PUT', `/admin/documents/${_docCurrentKey}`, { title, content });
+  const { ok, data } = await api('PUT', `/admin/documents/${_docCurrentKey}`, { title, content, link });
   if (ok) {
     _docCache[_docCurrentKey] = data.document;   // 用净化后的服务端返回值刷新
     document.getElementById('doc-editor').innerHTML = data.document.content;
@@ -3368,7 +3375,8 @@ function showAnnounceQueue(list) {
             <span style="font-size:10px;font-weight:700;color:#fff;background:${c.bar};padding:2px 8px;border-radius:4px;">${c.tag}</span>
             <div style="font-size:16px;font-weight:700;flex:1;">${esc(a.title)}</div>
           </div>
-          <div style="font-size:13.5px;color:var(--txm);line-height:1.75;white-space:pre-wrap;max-height:50vh;overflow:auto;">${esc(a.content)}</div>
+          <div style="font-size:13.5px;color:var(--txm);line-height:1.75;max-height:50vh;overflow:auto;">${a.content||''}</div>
+          ${a.link ? `<div style="margin-top:12px;"><a href="${esc(a.link)}" target="_blank" rel="noopener" style="font-size:13px;color:var(--ac);">查看详情 →</a></div>` : ''}
           <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;">
             <span style="font-size:11px;color:var(--txd);">${list.length>1?`${i+1} / ${list.length}`:''}</span>
             <button class="btn primary" id="an-ack">${i < list.length-1 ? '我知道了 · 下一条' : '我知道了'}</button>
@@ -3422,7 +3430,16 @@ function openAnnounceModal(a) {
       </div>
       <div style="padding:18px 20px;display:flex;flex-direction:column;gap:11px;">
         <div class="form-row"><label>标题 <span style="color:var(--err)">*</span></label><input type="text" id="an-title" value="${edit?esc(a.title):''}" placeholder="公告标题"/></div>
-        <div class="form-row"><label>内容</label><textarea id="an-content" rows="5" style="width:100%;padding:8px;font-size:13px;font-family:inherit;background:var(--sf2);border:1px solid var(--bd);border-radius:4px;color:var(--tx);resize:vertical;" placeholder="公告正文，支持换行">${edit?esc(a.content):''}</textarea></div>
+        <div class="form-row"><label>内容</label><div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;">
+            <button type="button" class="btn" style="font-size:12px;padding:2px 7px;font-weight:700;" onmousedown="event.preventDefault()" onclick="rtExec('bold')">B</button>
+            <button type="button" class="btn" style="font-size:12px;padding:2px 7px;font-style:italic;" onmousedown="event.preventDefault()" onclick="rtExec('italic')">I</button>
+            <button type="button" class="btn" style="font-size:12px;padding:2px 7px;" onmousedown="event.preventDefault()" onclick="rtExec('insertUnorderedList')">• 列表</button>
+            <button type="button" class="btn" style="font-size:12px;padding:2px 7px;" onmousedown="event.preventDefault()" onclick="rtLink()">🔗 链接</button>
+            <button type="button" class="btn" style="font-size:12px;padding:2px 7px;" onmousedown="event.preventDefault()" onclick="rtImage()">🖼 图片</button>
+          </div>
+          <div id="an-content" contenteditable="true" style="min-height:120px;max-height:36vh;overflow:auto;padding:10px;font-size:13px;line-height:1.7;background:var(--sf);border:1px solid var(--bd);border-radius:4px;color:var(--tx);outline:none;">${edit?(a.content||''):''}</div>
+        </div>
+        <div class="form-row"><label>外部链接（可选，弹窗里显示「查看详情」按钮）</label><input type="text" id="an-link" value="${edit?esc(a.link||''):''}" placeholder="https://example.com/detail" style="font-family:monospace;font-size:12px;"/></div>
         <div class="settings-grid">
           <div class="form-row"><label>级别</label>
             <select id="an-level">
@@ -3446,7 +3463,8 @@ function openAnnounceModal(a) {
 async function submitAnnounce(id) {
   const body = {
     title: document.getElementById('an-title').value.trim(),
-    content: document.getElementById('an-content').value,
+    content: document.getElementById('an-content').innerHTML,
+    link: document.getElementById('an-link').value.trim(),
     level: document.getElementById('an-level').value,
     active: document.getElementById('an-active').value === '1',
   };
@@ -5385,6 +5403,37 @@ async function loadAuthedApps() {
       </div>
     </div>`;
   }).join('');
+}
+
+// 用户端：单个已授权应用的详情弹窗（市场里点「管理」）
+async function openMyAppDetail(id, name) {
+  const { ok, data } = await api('GET', '/apps/authed');
+  if (!ok) { showToast('⚠️ 加载失败'); return; }
+  const a = (data.apps || []).find(x => x.id === id);
+  if (!a) { showToast('该应用暂无授权记录'); return; }
+  const scopes = (a.granted_scope || '').split(' ').filter(Boolean);
+  const chips = scopes.length
+    ? scopes.map(s => { const m = SCOPE_LABELS[s] || { label:s, descr:'' };
+        return `<span title="${esc(m.descr)}" style="display:inline-block;font-size:11px;padding:3px 8px;border-radius:6px;margin:0 5px 5px 0;background:${m.sensitive?'rgba(255,149,0,.14)':'var(--sf2)'};color:${m.sensitive?'#B26A00':'var(--txm)'};">${esc(m.label)}${m.sensitive?' ⚠':''}</span>`; }).join('')
+    : '<span style="font-size:12px;color:var(--txd);">此授权早于 v3.3.0，未记录具体权限</span>';
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  ov.innerHTML = `<div style="background:var(--sf,#fff);border-radius:14px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+      <div style="width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;background:${esc(a.icon_bg||'#F0F0F0')}">${esc(a.icon||'📦')}</div>
+      <div style="flex:1;font-size:15px;font-weight:700;">${esc(a.name)}</div>
+      <button class="btn" style="font-size:11px;" onclick="this.closest('div[style*=fixed]').remove()">关闭</button>
+    </div>
+    <div style="padding:18px 20px;">
+      ${a.description?`<div style="font-size:12.5px;color:var(--txm);margin-bottom:12px;">${esc(a.description)}</div>`:''}
+      <div style="font-size:11.5px;color:var(--txd);margin-bottom:7px;">该应用可获取你的：</div>
+      <div>${chips}</div>
+      ${a.authed_at?`<div style="font-size:11px;color:var(--txd);margin-top:10px;">授权于 ${fmtTime(a.authed_at)}</div>`:''}
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn" style="flex:1;color:var(--err);border-color:var(--err);" onclick="this.closest('div[style*=fixed]').remove();confirmRevokeApp('${a.id}','${esc(a.name)}')">撤销授权</button>
+      </div>
+    </div></div>`;
+  document.body.appendChild(ov);
 }
 
 async function confirmRevokeApp(id, name) {

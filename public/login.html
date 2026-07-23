@@ -1077,7 +1077,7 @@
         <div class="aux-links">
           <button onclick="switchMode('register')">注册账号</button>
           <span class="aux-dot">·</span>
-          <a href="#">忘记密码</a>
+          <a href="javascript:void 0" onclick="showForgotPassword()">忘记密码</a>
         </div>
       </div>
 
@@ -1524,6 +1524,54 @@
     } catch(e) { showTip('login','error',e.message||'登录失败'); }
   }
 
+  // ── 忘记密码 ──
+  function showForgotPassword() {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+    ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:380px;width:100%;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+      <div style="font-size:16px;font-weight:700;color:#1D1D1F;margin-bottom:6px;">找回密码</div>
+      <div style="font-size:12.5px;color:#86868B;line-height:1.6;margin-bottom:14px;">输入绑定了邮箱或手机号的账号，我们会发送验证码。</div>
+      <input id="fp-account" placeholder="邮箱 / 手机号 / 用户名 / UID" style="width:100%;height:38px;padding:0 10px;border:1px solid #D2D2D7;border-radius:9px;outline:none;font-size:13px;margin-bottom:8px;"/>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="fp-code" placeholder="验证码" inputmode="numeric" maxlength="6" style="flex:1;height:38px;padding:0 10px;border:1px solid #D2D2D7;border-radius:9px;outline:none;font-size:13px;letter-spacing:4px;font-family:monospace;"/>
+        <button id="fp-send" class="btn" style="white-space:nowrap;font-size:12px;" onclick="fpSend()">获取验证码</button>
+      </div>
+      <input id="fp-newpw" type="password" placeholder="新密码（至少 8 位）" style="width:100%;height:38px;padding:0 10px;border:1px solid #D2D2D7;border-radius:9px;outline:none;font-size:13px;margin-bottom:8px;"/>
+      <div id="fp-tip" style="font-size:12px;min-height:16px;margin-bottom:6px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" style="flex:1;" onclick="this.closest('div[style*=fixed]').remove()">取消</button>
+        <button class="btn-primary" style="flex:1;border:none;border-radius:9px;cursor:pointer;" onclick="fpReset()">重置密码</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#fp-account').focus();
+  }
+  function fpTip(type, msg) { const el = document.getElementById('fp-tip'); if (el) { el.textContent = msg; el.style.color = type==='error'?'#FF3B30':'#5CB85C'; } }
+  async function fpSend() {
+    const account = document.getElementById('fp-account').value.trim();
+    if (!account) return fpTip('error','请先输入账号');
+    const btn = document.getElementById('fp-send'); btn.disabled = true; btn.textContent = '…';
+    try {
+      const r = await fetch('/api/public/forgot-password/send', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account }) });
+      const d = await r.json();
+      fpTip('success', d.message || '验证码已发送');
+      countdown('fp-send', 60);
+    } catch (_) { fpTip('error','发送失败'); btn.disabled=false; btn.textContent='获取验证码'; }
+  }
+  async function fpReset() {
+    const account = document.getElementById('fp-account').value.trim();
+    const code = document.getElementById('fp-code').value.trim();
+    const new_password = document.getElementById('fp-newpw').value;
+    if (!account || !code || !new_password) return fpTip('error','请填完整');
+    if (new_password.length < 8) return fpTip('error','新密码至少 8 位');
+    try {
+      const r = await fetch('/api/public/forgot-password/reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account, code, new_password }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error);
+      document.querySelector('div[style*="z-index: 9999"]')?.remove();
+      showTip('login','success','✓ 密码已重置，请用新密码登录');
+    } catch (e) { fpTip('error', e.message || '重置失败'); }
+  }
+
   // ── 服务条款 / 隐私政策 弹窗 ──
   async function showDoc(key) {
     let doc;
@@ -1532,6 +1580,8 @@
       doc = await r.json();
       if (!r.ok) throw 0;
     } catch (_) { showTip('login','error','文档加载失败'); return; }
+    // 管理员填了外部链接 → 直接新标签打开，不弹富文本
+    if (doc.link && /^https?:\/\//i.test(doc.link)) { window.open(doc.link, '_blank', 'noopener'); return; }
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
     const body = (doc.content && doc.content.trim()) ? doc.content : '<p style="color:#888;">管理员尚未设置该文档内容。</p>';

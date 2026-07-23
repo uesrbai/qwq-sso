@@ -393,6 +393,50 @@ async function handlePasswordLogin(req, res) {
 router.post('/email/login',   handlePasswordLogin);   // 旧路径，保留兼容
 router.post('/account/login', handlePasswordLogin);   // 语义更准的别名
 
+// ── 忘记密码（公开，无需登录）──
+// 隐私：无论账号是否存在都返回同样的成功文案，不泄露账号存在性。
+// 验证码存在 reset:<userId> 下，重置时校验。
+router.post('/public/forgot-password/send', async (req, res) => {
+  const generic = { success: true, message: '若该账号存在且绑定了邮箱或手机，验证码已发送' };
+  const identifier = String(req.body.account || '').trim();
+  const user = identifier ? resolveUser(identifier) : null;
+  if (!user || user === AMBIGUOUS) return res.json(generic);
+
+  const channel = user.email ? 'email' : (user.phone ? 'sms' : null);
+  const target  = user.email || user.phone;
+  if (!channel) return res.json(generic);   // 纯第三方登录账号，没有可下发的渠道
+
+  const code   = genCode();
+  const expire = parseInt(process.env[channel === 'email' ? 'EMAIL_CODE_EXPIRE' : 'SMS_CODE_EXPIRE'] || (channel === 'email' ? '600' : '300'));
+  otp.set.run(`reset:${user.id}`, code, Date.now() + expire * 1000);
+  if (hasMessageHub()) {
+    try { if (channel === 'email') await sendEmailCode(target, code); else await sendSmsCode(target, code); }
+    catch (e) { console.error('[FORGOT] 发送失败:', e.message); }   // 不把细节回传，避免探测
+  } else {
+    console.log(`[DEV RESET OTP] ${target} → ${code}`);
+  }
+  res.json(generic);
+});
+
+router.post('/public/forgot-password/reset', async (req, res) => {
+  const { account, code, new_password } = req.body;
+  if (!new_password || new_password.length < 8) return res.status(400).json({ error: '新密码至少 8 位' });
+  const badCode = { error: '验证码无效或已过期' };
+  const user = account ? resolveUser(String(account).trim()) : null;
+  if (!user || user === AMBIGUOUS) return res.status(400).json(badCode);
+
+  const key = `reset:${user.id}`;
+  const entry = otp.get.get(key);
+  if (!entry || Date.now() > entry.expire_at) { otp.del.run(key); return res.status(400).json(badCode); }
+  otp.incAtt.run(key);
+  if (entry.attempts >= 5) { otp.del.run(key); return res.status(400).json({ error: '错误次数过多，请重新获取验证码' }); }
+  if (entry.code !== code) return res.status(400).json({ error: '验证码不正确' });
+  otp.del.run(key);
+  users.updatePassword.run(await bcrypt.hash(new_password, 12), user.id);
+  logLogin({ userId: user.id, userName: user.name, uidSeq: String(user.uid_seq), method: '找回密码', ip: req.ip, ua: req.headers['user-agent'], status: 'success' });
+  res.json({ success: true });
+});
+
 // ── 用户信息 ──
 // ── KYC 实名认证接口 ──
 const { createKycSession, verifyKycDirect, verifyDiditWebhook, verifyStripeWebhook } = require('./kyc');
@@ -726,6 +770,8 @@ function sanitizeHtml(html) {
   return s;
 }
 
+const safeLink = u => (typeof u === 'string' && /^https?:\/\//i.test(u.trim())) ? u.trim().slice(0, 500) : '';
+
 // 公开：登录页点「服务条款/隐私政策」时展示（无需登录）
 router.get('/public/document/:key', (req, res) => {
   if (!DOC_KEYS.includes(req.params.key)) return res.status(404).json({ error: '文档不存在' });
@@ -735,6 +781,7 @@ router.get('/public/document/:key', (req, res) => {
     key: req.params.key,
     title: (row && row.title) || DOC_TITLES[req.params.key],
     content: (row && row.content) || '',
+    link: (row && row.link) || '',          // 填了外链则前端直接跳外链，不弹富文本
     updated_at: row ? row.updated_at : null,
   });
 });
@@ -743,7 +790,7 @@ router.get('/public/document/:key', (req, res) => {
 router.get('/admin/documents', requireAdmin(3), (req, res) => {
   const docs = DOC_KEYS.map(k => {
     const row = documents.get.get(k);
-    return { key: k, title: (row && row.title) || DOC_TITLES[k], content: (row && row.content) || '', updated_at: row ? row.updated_at : null };
+    return { key: k, title: (row && row.title) || DOC_TITLES[k], content: (row && row.content) || '', link: (row && row.link) || '', updated_at: row ? row.updated_at : null };
   });
   res.json({ success: true, documents: docs });
 });
@@ -754,7 +801,8 @@ router.put('/admin/documents/:key', requireAdmin(2), (req, res) => {
   if (!DOC_KEYS.includes(key)) return res.status(404).json({ error: '文档不存在' });
   const title = (req.body.title || DOC_TITLES[key]).slice(0, 100);
   const content = sanitizeHtml(req.body.content).slice(0, 200000);
-  documents.upsert.run(key, title, content);
+  const link = safeLink(req.body.link);
+  documents.upsert.run(key, title, content, link);
   res.json({ success: true, document: documents.get.get(key) });
 });
 
@@ -784,25 +832,27 @@ router.get('/admin/announcements', requireAdmin(3), (req, res) => {
   res.json({ success: true, announcements: announcements.findAll.all() });
 });
 router.post('/admin/announcements', requireAdmin(2), (req, res) => {
-  const { title, content = '', level = 'info', active = true } = req.body;
+  const { title, content = '', level = 'info', active = true, link } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: '标题必填' });
   const lv = ['info', 'warn', 'urgent'].includes(level) ? level : 'info';
   const id = uuidv4();
-  announcements.insert.run({ id, title: title.trim(), content, level: lv, active: active ? 1 : 0 });
+  // 内容是富文本 HTML，净化后落库（同法律文档）
+  announcements.insert.run({ id, title: title.trim(), content: sanitizeHtml(content), level: lv, active: active ? 1 : 0, link: safeLink(link) });
   res.json({ success: true, announcement: announcements.findById.get(id) });
 });
 router.patch('/admin/announcements/:id', requireAdmin(2), (req, res) => {
   const a = announcements.findById.get(req.params.id);
   if (!a) return res.status(404).json({ error: '公告不存在' });
-  const { title, content, level, active } = req.body;
+  const { title, content, level, active, link } = req.body;
   const lv = ['info', 'warn', 'urgent'].includes(level) ? level : a.level;
   // 更新 updated_at → 已读过的用户会重新弹出（这是"更新后重弹"的机制）
   announcements.update.run({
     id: a.id,
     title: (title ?? a.title).trim() || a.title,
-    content: content ?? a.content,
+    content: content !== undefined ? sanitizeHtml(content) : a.content,
     level: lv,
     active: active !== undefined ? (active ? 1 : 0) : a.active,
+    link: link !== undefined ? safeLink(link) : (a.link || ''),
   });
   res.json({ success: true, announcement: announcements.findById.get(a.id) });
 });
