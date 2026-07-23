@@ -2008,9 +2008,9 @@ router.post('/dev/login', async (req, res) => {
     _dev: true, // 携带标记，方便识别
   });
 
-  // 不含密码的用户数据
-  const { password_hash, ...safeUser } = user;
-  res.json({ success: true, token, user: safeUser, _dev: true });
+  // 不含敏感字段的用户数据
+  const { password_hash, twofa_secret, ...safeUserObj } = user;
+  res.json({ success: true, token, user: safeUserObj, _dev: true });
 });
 
 // ── 退出登录（客户端清除 token，服务端记录日志）──

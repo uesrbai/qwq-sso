@@ -1661,6 +1661,10 @@
   document.addEventListener('DOMContentLoaded', async () => {
     renderPlatformList();
 
+    // 第三方登录若用户开了 2FA，会带 ?tfa= 跳回这里，直接弹二段验证浮层
+    const tfaToken = new URLSearchParams(location.search).get('tfa');
+    if (tfaToken) show2faLogin(tfaToken);
+
     // 浏览器支持 Passkey 才显示按钮
     if (window.WebAuthnGlue && WebAuthnGlue.supported()) {
       const pb = document.getElementById('passkey-login-btn');

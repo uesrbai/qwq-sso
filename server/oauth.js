@@ -14,7 +14,7 @@ const axios   = require('axios');
 const crypto  = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { db, nextUidSeq, users, oauth, state: stateStore, logs } = require('./db');
-const { signToken } = require('./auth');
+const { signToken, signShortToken } = require('./auth');
 
 const router = express.Router();
 
@@ -110,14 +110,23 @@ function loginSuccess(res, user) {
     });
   } catch (_) {}
 
-  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
-
   // 取出并清掉登录前记下的回跳地址（OIDC 授权流程会用到）
   let next = null;
   if (res.req?.session?.postLoginNext) {
     next = safeNextPath(res.req.session.postLoginNext);
     delete res.req.session.postLoginNext;
   }
+
+  // 开了 2FA 的用户：第三方登录也要走二段，不能绕过（否则强制 2FA 形同虚设）。
+  // 发 5 分钟中间态令牌，跳到登录页由前端浮层校验动态码，再换正式 token。
+  if (user.twofa_enabled) {
+    const pending = signShortToken({ uid: user.id, stage: '2fa', method: '第三方 OAuth' });
+    const q = new URLSearchParams({ tfa: pending });
+    if (next) q.set('next', next);
+    return res.redirect(`/login.html?${q}`);
+  }
+
+  const token = signToken({ uid: user.id, name: user.name, role: user.role, adminLevel: user.admin_level });
   // 中间页拿 token 存进 localStorage 后再跳到 next；有 next 时它会跳过倒计时直接回授权页
   const q = new URLSearchParams({ token, name: user.name || '' });
   if (next) q.set('next', next);
