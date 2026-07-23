@@ -49,6 +49,10 @@ const apiRoutes    = require('./api');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// Zeabur 等平台在反向代理后面：信任代理，让 req.protocol/req.ip 反映真实值
+// （Passkey 的 origin 校验依赖正确的 https 协议判断）
+app.set('trust proxy', true);
+
 // ── 基础中间件 ──
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
 app.use(express.json());
@@ -128,7 +132,7 @@ function buildFooterHtml() {
     : '';
 
   // 版本信息点击跳转 GitHub（不可修改）
-  const versionLink = `<a href="https://github.com/uesrbai/qwq-sso" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;opacity:.7;">Powered by QWQ SSO v3.3.9</a>`;
+  const versionLink = `<a href="https://github.com/uesrbai/qwq-sso" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;opacity:.7;">Powered by QWQ SSO v3.3.9.1</a>`;
 
   return `<footer style="text-align:center;padding:20px 20px 8px;margin-top:24px;font-size:11px;color:rgba(0,0,0,.38);border-top:1px solid rgba(0,0,0,.07);line-height:1.9;user-select:none;">
   <div style="font-weight:500;">${copyright}</div>${infoLine}

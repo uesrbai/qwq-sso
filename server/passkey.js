@@ -20,13 +20,26 @@ const { signToken, requireAuth } = require('./auth');
 
 const router = express.Router();
 
+// RP ID / origin 必须与浏览器实际所在的域名一致，否则 navigator.credentials 会拒绝
+// （常见坑：写死 BASE_URL，但用户用别的域名访问；或反代下 req.protocol 变 http）。
+// 因此优先从「本次请求」推导：X-Forwarded-Host / Host + X-Forwarded-Proto。
 function rpConfig(req) {
-  const base = (process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  let host;
-  try { host = new URL(base).hostname; } catch (_) { host = 'localhost'; }
-  let origin;
-  try { origin = new URL(base).origin; } catch (_) { origin = base; }
-  return { rpID: host, origin, rpName: process.env.TWOFA_ISSUER || 'QWQ SSO' };
+  const fwdHost  = (req.get('x-forwarded-host') || '').split(',')[0].trim();
+  const host     = (fwdHost || req.get('host') || '').split(',')[0].trim();
+  const fwdProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const proto    = fwdProto || req.protocol || 'https';
+
+  let rpID, origin;
+  if (host) {
+    rpID   = host.split(':')[0];                 // 去掉端口
+    origin = `${proto}://${host}`;
+  } else {
+    // 兜底：BASE_URL
+    const base = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+    try { rpID = new URL(base).hostname; origin = new URL(base).origin; }
+    catch (_) { rpID = 'localhost'; origin = base; }
+  }
+  return { rpID: rpID || 'localhost', origin, rpName: process.env.TWOFA_ISSUER || 'QWQ SSO' };
 }
 
 const b64 = buf => Buffer.from(buf).toString('base64');

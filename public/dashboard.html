@@ -595,7 +595,23 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 // 格式化时间
-function fmtTime(s) { if (!s) return '—'; return s.replace('T',' ').slice(0,16); }
+// 当前用户生效的时区：账号设定里选的，或 auto 时跟随设备
+function userTz() {
+  const tz = (window.ME && ME.timezone) || 'auto';
+  return (!tz || tz === 'auto') ? Intl.DateTimeFormat().resolvedOptions().timeZone : tz;
+}
+// 时间显示：数据库存的是 UTC（datetime('now') 无时区标记，或 toISOString 带 Z），
+// 统一按 UTC 解析后转成用户所选时区。此前这里只做字符串切片、从不转换，
+// 导致「时区设置不生效」且中国用户看到的时间差 8 小时。
+function fmtTime(s) {
+  if (!s) return '—';
+  let iso = String(s).includes('T') ? String(s) : String(s).replace(' ', 'T');
+  if (!/[Zz]|[+-]\d\d:?\d\d$/.test(iso)) iso += 'Z';       // 无时区标记 → 视为 UTC
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(s).replace('T',' ').slice(0,16);   // 兜底
+  try { return d.toLocaleString('sv-SE', { timeZone: userTz() }).slice(0,16); }  // YYYY-MM-DD HH:MM
+  catch(_) { return d.toLocaleString('sv-SE').slice(0,16); }
+}
 
 // 当前登录用户信息
 let ME = null;
@@ -2304,18 +2320,23 @@ async function loadPasskeyCard() {
 }
 
 async function addPasskey() {
+  const { ok, data } = await api('POST', '/passkey/register-options');
+  if (!ok) { showToast('⚠️ ' + (data.error||'发起失败')); return; }
+  showToast('请在弹出的系统对话框中完成验证…');
+  let cred;
   try {
-    const { ok, data } = await api('POST', '/passkey/register-options');
-    if (!ok) { showToast('⚠️ ' + (data.error||'发起失败')); return; }
-    showToast('请在弹出的系统对话框中完成验证…');
-    let cred;
-    try { cred = await WebAuthnGlue.startRegistration(data); }
-    catch (e) { if (e.name === 'NotAllowedError') { showToast('已取消'); return; } throw e; }
-    const name = prompt('给这个 Passkey 起个名字（如：我的手机、工作电脑）', '我的 Passkey') || '我的 Passkey';
-    const r = await api('POST', '/passkey/register-verify', { credential: cred, name });
-    if (r.ok) { showToast('✓ Passkey 已添加'); loadPasskeyCard(); }
-    else showToast('⚠️ ' + (r.data.error||'添加失败'));
-  } catch (e) { showToast('⚠️ ' + (e.message||'添加失败')); }
+    cred = await WebAuthnGlue.startRegistration(data);
+  } catch (e) {
+    // 把浏览器抛的原始错误显出来，便于定位（NotAllowedError=取消/超时；SecurityError=域名不匹配）
+    if (e.name === 'NotAllowedError') { showToast('已取消或超时'); return; }
+    console.error('[Passkey] create 失败:', e);
+    showToast(`⚠️ 无法调起 Passkey：${e.name || ''} ${e.message || ''}`.trim());
+    return;
+  }
+  const name = prompt('给这个 Passkey 起个名字（如：我的手机、工作电脑）', '我的 Passkey') || '我的 Passkey';
+  const r = await api('POST', '/passkey/register-verify', { credential: cred, name });
+  if (r.ok) { showToast('✓ Passkey 已添加'); loadPasskeyCard(); }
+  else showToast('⚠️ 校验失败：' + (r.data.error||'添加失败'));
 }
 
 async function removePasskey(id, name) {
@@ -2780,6 +2801,7 @@ async function saveProfile() {
   const { ok, data } = await api('POST', '/user/profile', { name, timezone });
   if (ok) {
     showToast('✓ 信息保存成功');
+    if (window.ME) ME.timezone = timezone;   // 即时生效，页面上的时间无需刷新即按新时区显示
     if (name) {
       const nameNode = document.getElementById('nav-uname');
       if (nameNode) nameNode.childNodes[0].textContent = name;
