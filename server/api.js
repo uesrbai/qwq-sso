@@ -5,7 +5,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
-const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, twofa, webauthn, apiKeys, env, points } = require('./db');
+const { db, nextUidSeq, users, oauth, otp, logs, apps, idp, twofa, webauthn, announcements, apiKeys, env, points } = require('./db');
 const { signToken, signShortToken, verifyToken, requireAuth, requireAdmin, requireApiKey } = require('./auth');
 const totp = require('./twofa');
 // 短信与邮件统一走 QWQ Message 分发中心（v3.3.3 起不再直连服务商）
@@ -707,6 +707,60 @@ router.get('/public/configured-platforms', (req, res) => {
   // 如果一个都没配置，默认显示微信+企业微信
   if (configured.length === 0) configured.push('wechat', 'wecom');
   res.json({ success: true, platforms: configured });
+});
+
+// ══════════════════════════════════════════
+// 公告
+// ══════════════════════════════════════════
+
+// 用户端：待弹出的公告（启用中、且未读或读的是旧版本）
+router.get('/user/announcements/pending', requireAuth, (req, res) => {
+  const list = announcements.findActive.all().filter(a => {
+    const r = announcements.getRead.get(req.user.uid, a.id);
+    return !r || r.read_version !== a.updated_at;   // 没读过，或读的是更新前的版本
+  });
+  res.json({ success: true, announcements: list });
+});
+
+// 用户端：标记已读（记下当前版本，之后再更新会重弹）
+router.post('/user/announcements/:id/read', requireAuth, (req, res) => {
+  const a = announcements.findById.get(req.params.id);
+  if (!a) return res.status(404).json({ error: '公告不存在' });
+  announcements.markRead.run(req.user.uid, a.id, a.updated_at);
+  res.json({ success: true });
+});
+
+// 管理端 CRUD（Lv.2 可管理）
+router.get('/admin/announcements', requireAdmin(3), (req, res) => {
+  res.json({ success: true, announcements: announcements.findAll.all() });
+});
+router.post('/admin/announcements', requireAdmin(2), (req, res) => {
+  const { title, content = '', level = 'info', active = true } = req.body;
+  if (!title || !title.trim()) return res.status(400).json({ error: '标题必填' });
+  const lv = ['info', 'warn', 'urgent'].includes(level) ? level : 'info';
+  const id = uuidv4();
+  announcements.insert.run({ id, title: title.trim(), content, level: lv, active: active ? 1 : 0 });
+  res.json({ success: true, announcement: announcements.findById.get(id) });
+});
+router.patch('/admin/announcements/:id', requireAdmin(2), (req, res) => {
+  const a = announcements.findById.get(req.params.id);
+  if (!a) return res.status(404).json({ error: '公告不存在' });
+  const { title, content, level, active } = req.body;
+  const lv = ['info', 'warn', 'urgent'].includes(level) ? level : a.level;
+  // 更新 updated_at → 已读过的用户会重新弹出（这是"更新后重弹"的机制）
+  announcements.update.run({
+    id: a.id,
+    title: (title ?? a.title).trim() || a.title,
+    content: content ?? a.content,
+    level: lv,
+    active: active !== undefined ? (active ? 1 : 0) : a.active,
+  });
+  res.json({ success: true, announcement: announcements.findById.get(a.id) });
+});
+router.delete('/admin/announcements/:id', requireAdmin(2), (req, res) => {
+  announcements.clearReads.run(req.params.id);
+  announcements.remove.run(req.params.id);
+  res.json({ success: true });
 });
 
 router.get('/user/me', requireAuth, (req, res) => {

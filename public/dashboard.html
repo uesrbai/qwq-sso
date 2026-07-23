@@ -544,6 +544,15 @@ function _devApi(method, path, body) {
 
   if (path === '/admin/logs') return ok({ success:true, logs: db.mockLogs });
 
+  // 公告（演示模式）
+  if (path === '/user/announcements/pending') return ok({ success:true, announcements: [] });
+  if (path === '/admin/announcements' && method === 'GET') return ok({ success:true, announcements: [
+    { id:'an1', title:'欢迎使用 QWQ SSO', content:'这是一条演示公告。', level:'info', active:1, updated_at:'2026-01-01 09:00' },
+  ] });
+  if (path.startsWith('/user/announcements/') && path.endsWith('/read')) return ok({ success:true });
+  if (path === '/admin/announcements' && method === 'POST') return ok({ success:true, announcement:{ id:'anx', ...body } });
+  if (path.startsWith('/admin/announcements/') && (method === 'PATCH' || method === 'DELETE')) return ok({ success:true });
+
   if (path === '/admin/api-keys') return ok({ success:true, keys:[
     { id:'k1', name:'演示密钥', token_prefix:'sk-live-dev-xxx…', scopes:'["users:read","auth:verify"]', status:'active', last_used_at:new Date().toISOString(), created_at:new Date().toISOString() }
   ]});
@@ -683,6 +692,10 @@ async function loadMe() {
       <button class="nav-item" onclick="goto('adm-levels')" id="ni-adm-levels">
         <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 16h4v-6H2zM8 16h4V8H8zM14 16h4V4h-4z"/></svg>
         等级管理
+      </button>
+      <button class="nav-item" onclick="goto('adm-announce')" id="ni-adm-announce">
+        <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8v4l10 4V4L3 8zM3 8H2v4h1M13 6l4-2M13 14l4 2"/></svg>
+        公告管理
       </button>
       <button class="nav-item" onclick="goto('adm-env')" id="ni-adm-env">
         <svg class="ni" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M6 7l3 3-3 3M11 13h3"/></svg>
@@ -1705,6 +1718,24 @@ async function loadMe() {
         </div>
       </div>
 
+      <!-- ▸ 管理端：公告管理 -->
+      <div class="page" id="page-adm-announce">
+        <div class="search-bar">
+          <div style="flex:1;font-size:12px;color:var(--txd);">发布的公告会在用户进入控制台时弹窗；编辑内容后，已读用户会重新看到。</div>
+          <button class="btn primary" onclick="openAnnounceModal()">+ 发布公告</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>标题</th><th>级别</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+              <tbody id="adm-announce-tbody">
+                <tr><td colspan="5" style="text-align:center;color:var(--txd);padding:24px;">加载中…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- ▸ 管理端：环境变量 -->
       <div class="page" id="page-adm-env">
 
@@ -2035,6 +2066,7 @@ function goto(page) {
   if(page === 'adm-apps')  { renderAdmApps(); }
   if(page === 'adm-api-logs') { loadAdmApiLogs(); }
   if(page === 'adm-env')   { renderEnvPage(); loadEnvPollStrategy(); loadFooterItems(); }
+  if(page === 'adm-announce') loadAdmAnnouncements();
   if(page === 'adm-levels') loadLevels();
   if(page === 'adm-env') renderEnvPage();
   if(page === 'adm-api') renderApiPage();
@@ -2791,6 +2823,7 @@ async function loadHome() {
   const { ok, data } = await api('GET', '/user/me');
   if (!ok) return;
   const u = data.user;
+  checkAnnouncements();   // 本会话首次进首页时弹待读公告
   // 积分
   document.querySelector('.pts-row').innerHTML = `
     <div class="pts-card" style="background:var(--sf2);border-color:var(--ac3);">
@@ -3163,6 +3196,137 @@ async function admRevokeCode(id, code, hasRecords) {
 // renderUserDetail 空实现已在上方定义
 
 // ── 管理端：应用管理 ──
+// ══════════════════════════════════════════
+// 用户端：公告弹窗
+// ══════════════════════════════════════════
+let _announceChecked = false;
+async function checkAnnouncements() {
+  if (_announceChecked || _IS_DEV) return;
+  _announceChecked = true;
+  const { ok, data } = await api('GET', '/user/announcements/pending');
+  if (!ok || !data.announcements.length) return;
+  showAnnounceQueue(data.announcements);
+}
+
+// 逐条弹出（多条时点"我知道了"看下一条）
+function showAnnounceQueue(list) {
+  let i = 0;
+  const colors = { info:{bar:'#5A8A00',tag:'普通'}, warn:{bar:'#FF9500',tag:'重要'}, urgent:{bar:'#FF3B30',tag:'紧急'} };
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9998;padding:16px;';
+  document.body.appendChild(ov);
+  function render() {
+    const a = list[i]; const c = colors[a.level] || colors.info;
+    ov.innerHTML = `
+      <div style="background:var(--sf,#fff);border-radius:14px;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.2);overflow:hidden;">
+        <div style="height:4px;background:${c.bar};"></div>
+        <div style="padding:22px 24px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:10px;font-weight:700;color:#fff;background:${c.bar};padding:2px 8px;border-radius:4px;">${c.tag}</span>
+            <div style="font-size:16px;font-weight:700;flex:1;">${esc(a.title)}</div>
+          </div>
+          <div style="font-size:13.5px;color:var(--txm);line-height:1.75;white-space:pre-wrap;max-height:50vh;overflow:auto;">${esc(a.content)}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;">
+            <span style="font-size:11px;color:var(--txd);">${list.length>1?`${i+1} / ${list.length}`:''}</span>
+            <button class="btn primary" id="an-ack">${i < list.length-1 ? '我知道了 · 下一条' : '我知道了'}</button>
+          </div>
+        </div>
+      </div>`;
+    ov.querySelector('#an-ack').onclick = async () => {
+      try { await api('POST', `/user/announcements/${a.id}/read`); } catch(_) {}
+      i++;
+      if (i < list.length) render(); else ov.remove();
+    };
+  }
+  render();
+}
+
+// ══════════════════════════════════════════
+// 管理端：公告管理
+// ══════════════════════════════════════════
+const ANNOUNCE_LEVELS = { info:{label:'普通',badge:'grey'}, warn:{label:'重要',badge:'warn'}, urgent:{label:'紧急',badge:'err'} };
+
+async function loadAdmAnnouncements() {
+  const tbody = document.getElementById('adm-announce-tbody');
+  if (!tbody) return;
+  const { ok, data } = await api('GET', '/admin/announcements');
+  if (!ok) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--err);padding:20px;">加载失败</td></tr>'; return; }
+  if (!data.announcements.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--txd);padding:20px;">暂无公告</td></tr>'; return; }
+  tbody.innerHTML = data.announcements.map(a => {
+    const lv = ANNOUNCE_LEVELS[a.level] || ANNOUNCE_LEVELS.info;
+    return `<tr>
+      <td style="font-weight:600;">${esc(a.title)}</td>
+      <td><span class="badge ${lv.badge}">${lv.label}</span></td>
+      <td>${a.active ? '<span class="badge ok">已发布</span>' : '<span class="badge grey">已停用</span>'}</td>
+      <td style="font-size:11px;color:var(--txm);">${esc((a.updated_at||'').slice(0,16))}</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn" style="font-size:11px;padding:3px 8px;" data-id="${esc(a.id)}" onclick='openAnnounceModal(${JSON.stringify(a).replace(/'/g,"&#39;")})'>编辑</button>
+        <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="toggleAnnounceActive('${a.id}',${a.active?0:1})">${a.active?'停用':'启用'}</button>
+        <button class="btn" style="font-size:11px;padding:3px 8px;color:var(--err);border-color:var(--err);" onclick="deleteAnnounce('${a.id}','${esc(a.title)}')">删除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openAnnounceModal(a) {
+  const edit = a && a.id;
+  document.getElementById('bind-modal').innerHTML = `
+    <div class="modal" style="min-width:480px;text-align:left;padding:0;overflow:hidden;">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;">
+        <span style="font-size:16px;">📢</span>
+        <div style="flex:1;font-size:14px;font-weight:700;">${edit?'编辑公告':'发布公告'}</div>
+        <button class="btn" style="font-size:11px;" onclick="document.getElementById('bind-modal').classList.remove('show')">关闭</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:11px;">
+        <div class="form-row"><label>标题 <span style="color:var(--err)">*</span></label><input type="text" id="an-title" value="${edit?esc(a.title):''}" placeholder="公告标题"/></div>
+        <div class="form-row"><label>内容</label><textarea id="an-content" rows="5" style="width:100%;padding:8px;font-size:13px;font-family:inherit;background:var(--sf2);border:1px solid var(--bd);border-radius:4px;color:var(--tx);resize:vertical;" placeholder="公告正文，支持换行">${edit?esc(a.content):''}</textarea></div>
+        <div class="settings-grid">
+          <div class="form-row"><label>级别</label>
+            <select id="an-level">
+              <option value="info" ${edit&&a.level==='info'?'selected':''}>普通</option>
+              <option value="warn" ${edit&&a.level==='warn'?'selected':''}>重要</option>
+              <option value="urgent" ${edit&&a.level==='urgent'?'selected':''}>紧急</option>
+            </select></div>
+          <div class="form-row"><label>状态</label>
+            <select id="an-active"><option value="1" ${!edit||a.active?'selected':''}>发布</option><option value="0" ${edit&&!a.active?'selected':''}>暂不发布</option></select></div>
+        </div>
+        ${edit?'<div style="font-size:11px;color:var(--txd);">⚠️ 保存后会重新向已读用户弹出本公告。</div>':''}
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;background:var(--bg);">
+        <button class="btn" onclick="document.getElementById('bind-modal').classList.remove('show')">取消</button>
+        <button class="btn primary" onclick="submitAnnounce(${edit?`'${a.id}'`:'null'})">${edit?'保存':'发布'}</button>
+      </div>
+    </div>`;
+  document.getElementById('bind-modal').classList.add('show');
+}
+
+async function submitAnnounce(id) {
+  const body = {
+    title: document.getElementById('an-title').value.trim(),
+    content: document.getElementById('an-content').value,
+    level: document.getElementById('an-level').value,
+    active: document.getElementById('an-active').value === '1',
+  };
+  if (!body.title) { showToast('⚠️ 标题必填'); return; }
+  const { ok, data } = id
+    ? await api('PATCH', `/admin/announcements/${id}`, body)
+    : await api('POST', '/admin/announcements', body);
+  document.getElementById('bind-modal').classList.remove('show');
+  if (ok) { showToast(id?'✓ 已保存':'✓ 已发布'); loadAdmAnnouncements(); }
+  else showToast('⚠️ ' + (data.error||'操作失败'));
+}
+
+async function toggleAnnounceActive(id, active) {
+  const { ok } = await api('PATCH', `/admin/announcements/${id}`, { active: !!active });
+  if (ok) { loadAdmAnnouncements(); showToast(active?'✓ 已启用':'✓ 已停用'); }
+}
+
+async function deleteAnnounce(id, title) {
+  if (!confirm(`删除公告「${title}」？无法恢复。`)) return;
+  const { ok } = await api('DELETE', `/admin/announcements/${id}`);
+  if (ok) { loadAdmAnnouncements(); showToast('✓ 已删除'); }
+}
+
 async function renderAdmApps() {
   const { ok, data } = await api('GET', '/admin/apps');
   const tbody = document.querySelector('#page-adm-apps tbody');

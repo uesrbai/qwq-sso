@@ -225,6 +225,21 @@ try { db.exec(`CREATE TABLE IF NOT EXISTS webauthn_credentials (
   public_key TEXT NOT NULL, counter INTEGER NOT NULL DEFAULT 0, transports TEXT,
   name TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), last_used_at TEXT
 )`); } catch(_) {}
+// 公告系统
+try { db.exec(`CREATE TABLE IF NOT EXISTS announcements (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL DEFAULT '',
+  level TEXT NOT NULL DEFAULT 'info',              -- info | warn | urgent
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))  -- 内容更新会刷新，用于"更新后重弹"
+)`); } catch(_) {}
+// 用户对公告的已读状态：记录已读时公告的 updated_at，之后公告再更新则重弹
+try { db.exec(`CREATE TABLE IF NOT EXISTS announcement_reads (
+  user_id TEXT NOT NULL, announcement_id TEXT NOT NULL,
+  read_version TEXT NOT NULL,                       -- 已读时公告的 updated_at
+  read_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, announcement_id)
+)`); } catch(_) {}
 try { db.exec("ALTER TABLE shop_goods ADD COLUMN redeem_mode TEXT NOT NULL DEFAULT 'code'"); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN allow_instant INTEGER NOT NULL DEFAULT 1'); } catch(_) {}
 try { db.exec('ALTER TABLE shop_goods ADD COLUMN redirect_url TEXT'); } catch(_) {}
@@ -319,6 +334,25 @@ const webauthnStmts = {
   rename:      db.prepare('UPDATE webauthn_credentials SET name=? WHERE id=? AND user_id=?'),
   remove:      db.prepare('DELETE FROM webauthn_credentials WHERE id=? AND user_id=?'),
   countByUser: db.prepare('SELECT COUNT(*) AS n FROM webauthn_credentials WHERE user_id=?'),
+};
+
+// ──────────────────────────────────────────
+// 公告
+// ──────────────────────────────────────────
+const announcementStmts = {
+  findAll:    db.prepare('SELECT * FROM announcements ORDER BY created_at DESC'),
+  findActive: db.prepare("SELECT * FROM announcements WHERE active=1 ORDER BY (level='urgent') DESC, created_at DESC"),
+  findById:   db.prepare('SELECT * FROM announcements WHERE id=?'),
+  // updated_at 用毫秒精度（strftime %f），避免"同一秒内更新+已读"导致重弹漏判
+  insert:     db.prepare("INSERT INTO announcements (id,title,content,level,active,updated_at) VALUES (@id,@title,@content,@level,@active,strftime('%Y-%m-%d %H:%M:%f','now'))"),
+  update:     db.prepare("UPDATE announcements SET title=@title, content=@content, level=@level, active=@active, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=@id"),
+  setActive:  db.prepare("UPDATE announcements SET active=?, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?"),
+  remove:     db.prepare('DELETE FROM announcements WHERE id=?'),
+  // 已读状态
+  getRead:    db.prepare('SELECT read_version FROM announcement_reads WHERE user_id=? AND announcement_id=?'),
+  markRead:   db.prepare(`INSERT INTO announcement_reads (user_id,announcement_id,read_version) VALUES (?,?,?)
+    ON CONFLICT(user_id,announcement_id) DO UPDATE SET read_version=excluded.read_version, read_at=datetime('now')`),
+  clearReads: db.prepare('DELETE FROM announcement_reads WHERE announcement_id=?'),
 };
 
 // ──────────────────────────────────────────
@@ -467,6 +501,7 @@ module.exports = {
   idp: idpStmts,
   twofa: twofaStmts,
   webauthn: webauthnStmts,
+  announcements: announcementStmts,
   apiKeys: apiKeyStmts,
   env: envStmts,
   points: pointsStmts,
